@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Súplica - Plataforma de oración comunitaria para misioneros bautistas fundamentales">
     <title>Súplica - Comunidad de Oración</title>
     
     <!-- Tailwind CSS -->
@@ -24,8 +23,6 @@
         
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            margin: 0;
-            padding: 0;
         }
         
         .line-clamp-3 {
@@ -39,20 +36,14 @@
 <body>
     <div id="root"></div>
     
-    <!-- Load App.jsx (Standalone version for CDN) -->
-    <script type="text/babel" src="src/App-standalone.jsx"></script>
+    <script type="text/babel" src="./src/App.jsx"></script>
     
-    <!-- Initialize React App -->
     <script type="text/babel">
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
         
-        // Initialize Lucide icons after render
-        setTimeout(() => {
-            if (window.lucide) {
-                lucide.createIcons();
-            }
-        }, 100);
+        // Initialize Lucide icons
+        lucide.createIcons();
     </script>
 </body>
 </html>
