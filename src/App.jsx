@@ -1,22 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Home, PlusCircle, Users, BarChart3, Book, Bell, Menu, X } from 'lucide-react';
+import { Home, PlusCircle, Users, BarChart3, Book, Bell, Menu, X, LogOut } from 'lucide-react';
 
 // API Configuration
 const API_BASE_URL = 'https://selahcreativeservices.com/suplica-backend/api.php';
 
 function App() {
   const [currentView, setCurrentView] = useState('home');
-  const [currentUser] = useState({ id: 1, nombre: 'María González' }); // Mock user
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [misiones, setMisiones] = useState([]);
   const [circulos, setCirculos] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Check if user is logged in on mount
   useEffect(() => {
-    loadMisiones();
-    loadCirculos();
-    loadEstadisticas();
+    const savedUser = localStorage.getItem('supplica_user');
+    if (savedUser) {
+      const user = JSON.parse(savedUser);
+      setCurrentUser(user);
+      setIsAuthenticated(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadMisiones();
+      loadCirculos();
+      loadEstadisticas();
+    }
+  }, [isAuthenticated]);
 
   const loadMisiones = async () => {
     try {
@@ -54,17 +67,35 @@ function App() {
     }
   };
 
+  const handleLogin = (user) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    localStorage.setItem('supplica_user', JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    localStorage.removeItem('supplica_user');
+    setCurrentView('home');
+  };
+
+  // Show login/signup if not authenticated
+  if (!isAuthenticated) {
+    return <AuthView onLogin={handleLogin} />;
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50">
+    <div className="min-h-screen bg-gray-900">
       {/* Header */}
-      <header className="bg-white shadow-md sticky top-0 z-50">
+      <header className="bg-blue-900 shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-3">
-              <div className="bg-gradient-to-br from-purple-600 to-blue-600 p-2 rounded-xl">
-                <Book className="w-6 h-6 text-white" />
+              <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-2 rounded-xl">
+                <Book className="w-6 h-6 text-yellow-200" />
               </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold text-yellow-200">
                 Súplica
               </h1>
             </div>
@@ -77,22 +108,30 @@ function App() {
             </nav>
 
             <div className="flex items-center space-x-4">
-              <button className="relative p-2 hover:bg-gray-100 rounded-full transition">
-                <Bell className="w-5 h-5 text-gray-600" />
+              <span className="text-yellow-200 text-sm hidden md:block">{currentUser?.nombre}</span>
+              <button 
+                onClick={handleLogout}
+                className="p-2 hover:bg-blue-800 rounded-full transition text-yellow-200"
+                title="Cerrar sesión"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+              <button className="relative p-2 hover:bg-blue-800 rounded-full transition">
+                <Bell className="w-5 h-5 text-yellow-200" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </button>
               <button 
                 className="md:hidden p-2"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               >
-                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                {mobileMenuOpen ? <X className="w-6 h-6 text-yellow-200" /> : <Menu className="w-6 h-6 text-yellow-200" />}
               </button>
             </div>
           </div>
 
           {/* Mobile Menu */}
           {mobileMenuOpen && (
-            <div className="md:hidden py-4 border-t">
+            <div className="md:hidden py-4 border-t border-blue-800">
               <div className="flex flex-col space-y-2">
                 <MobileNavButton icon={Home} label="Inicio" onClick={() => { setCurrentView('home'); setMobileMenuOpen(false); }} />
                 <MobileNavButton icon={PlusCircle} label="Nueva Misión" onClick={() => { setCurrentView('nueva'); setMobileMenuOpen(false); }} />
@@ -111,9 +150,200 @@ function App() {
         {currentView === 'circulos' && <CirculosView circulos={circulos} currentUser={currentUser} onUpdate={loadCirculos} />}
         {currentView === 'stats' && <EstadisticasView stats={estadisticas} />}
       </main>
+
+      {/* Footer */}
+      <footer className="bg-blue-900 mt-12 py-6">
+        <div className="max-w-7xl mx-auto px-4 text-center text-yellow-200 text-sm">
+          <p>Súplica - Comunidad de Oración para Misioneros Bautistas</p>
+          <p className="mt-2 text-yellow-300 opacity-75">🙏 Orando juntos por las misiones 🌍</p>
+        </div>
+      </footer>
     </div>
   );
 }
+
+// Authentication View
+const AuthView = ({ onLogin }) => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [formData, setFormData] = useState({
+    nombre: '',
+    email: '',
+    password: ''
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        // Login
+        const response = await fetch(`${API_BASE_URL}/usuarios`);
+        const data = await response.json();
+        
+        if (data.success) {
+          const user = data.data.find(u => u.email === formData.email);
+          
+          if (user) {
+            // In production, you'd verify password hash here
+            onLogin(user);
+          } else {
+            setError('Email o contraseña incorrectos');
+          }
+        }
+      } else {
+        // Signup
+        const response = await fetch(`${API_BASE_URL}/usuarios`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre: formData.nombre,
+            email: formData.email,
+            password: formData.password,
+            biografia: ''
+          })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          // Auto-login after signup
+          const newUser = {
+            id: data.id,
+            nombre: formData.nombre,
+            email: formData.email
+          };
+          onLogin(newUser);
+        } else {
+          setError(data.message || 'Error al crear cuenta');
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setError('Error de conexión. Verifica que el backend esté funcionando.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
+      <div className="max-w-md w-full">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-800 p-4 rounded-2xl mb-4">
+            <Book className="w-12 h-12 text-yellow-200" />
+          </div>
+          <h1 className="text-4xl font-bold text-yellow-200 mb-2">Súplica</h1>
+          <p className="text-yellow-300 text-lg">Comunidad de Oración Misionera</p>
+        </div>
+
+        {/* Auth Card */}
+        <div className="bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
+          <div className="flex mb-6">
+            <button
+              onClick={() => setIsLogin(true)}
+              className={`flex-1 py-3 font-semibold rounded-lg transition ${
+                isLogin
+                  ? 'bg-blue-800 text-yellow-200'
+                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              }`}
+            >
+              Iniciar Sesión
+            </button>
+            <button
+              onClick={() => setIsLogin(false)}
+              className={`flex-1 py-3 font-semibold rounded-lg transition ml-2 ${
+                !isLogin
+                  ? 'bg-blue-800 text-yellow-200'
+                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              }`}
+            >
+              Registrarse
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-semibold text-yellow-200 mb-2">
+                  Nombre Completo
+                </label>
+                <input
+                  type="text"
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  placeholder="Juan Pérez"
+                  required
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-semibold text-yellow-200 mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                placeholder="tu@email.com"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-yellow-200 mb-2">
+                Contraseña
+              </label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-bold rounded-lg hover:from-blue-600 hover:to-blue-800 transition shadow-lg disabled:opacity-50"
+            >
+              {loading ? 'Procesando...' : (isLogin ? 'Iniciar Sesión' : 'Crear Cuenta')}
+            </button>
+          </form>
+
+          <p className="text-center text-gray-400 text-sm mt-6">
+            {isLogin ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}
+            <button
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-yellow-300 hover:text-yellow-200 font-semibold"
+            >
+              {isLogin ? 'Regístrate aquí' : 'Inicia sesión'}
+            </button>
+          </p>
+        </div>
+
+        <p className="text-center text-gray-500 text-sm mt-6">
+          Plataforma de oración para misioneros bautistas fundamentales
+        </p>
+      </div>
+    </div>
+  );
+};
 
 // Navigation Components
 const NavButton = ({ icon: Icon, label, active, onClick }) => (
@@ -121,8 +351,8 @@ const NavButton = ({ icon: Icon, label, active, onClick }) => (
     onClick={onClick}
     className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${
       active 
-        ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white' 
-        : 'text-gray-600 hover:bg-gray-100'
+        ? 'bg-blue-700 text-yellow-200' 
+        : 'text-yellow-300 hover:bg-blue-800'
     }`}
   >
     <Icon className="w-5 h-5" />
@@ -133,10 +363,10 @@ const NavButton = ({ icon: Icon, label, active, onClick }) => (
 const MobileNavButton = ({ icon: Icon, label, onClick }) => (
   <button
     onClick={onClick}
-    className="flex items-center space-x-3 px-4 py-3 hover:bg-gray-100 rounded-lg transition"
+    className="flex items-center space-x-3 px-4 py-3 hover:bg-blue-800 rounded-lg transition"
   >
-    <Icon className="w-5 h-5 text-gray-600" />
-    <span className="font-medium text-gray-700">{label}</span>
+    <Icon className="w-5 h-5 text-yellow-300" />
+    <span className="font-medium text-yellow-200">{label}</span>
   </button>
 );
 
@@ -153,9 +383,9 @@ const HomeView = ({ misiones, currentUser, onUpdate }) => {
   return (
     <div className="space-y-6">
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-purple-600 via-blue-600 to-purple-700 rounded-2xl p-8 text-white shadow-xl">
-        <h2 className="text-3xl font-bold mb-2">Oremos juntos por nuestras misiones</h2>
-        <p className="text-purple-100 text-lg">
+      <div className="bg-gradient-to-r from-blue-800 via-blue-900 to-blue-800 rounded-2xl p-8 shadow-xl border border-blue-700">
+        <h2 className="text-3xl font-bold mb-2 text-yellow-200">Oremos juntos por nuestras misiones</h2>
+        <p className="text-yellow-300 text-lg">
           {misiones.length} peticiones activas esperando tu intercesión
         </p>
       </div>
@@ -182,7 +412,7 @@ const HomeView = ({ misiones, currentUser, onUpdate }) => {
 
       {filteredMisiones.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">No hay misiones en esta categoría</p>
+          <p className="text-yellow-300 text-lg">No hay misiones en esta categoría</p>
         </div>
       )}
     </div>
@@ -194,8 +424,8 @@ const FilterButton = ({ label, active, onClick }) => (
     onClick={onClick}
     className={`px-4 py-2 rounded-full font-medium transition ${
       active
-        ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md'
-        : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+        ? 'bg-blue-800 text-yellow-200 shadow-md border border-blue-600'
+        : 'bg-gray-800 text-yellow-300 hover:bg-gray-700 border border-gray-700'
     }`}
   >
     {label}
@@ -206,10 +436,10 @@ const MisionCard = ({ mision, currentUser, onUpdate }) => {
   const [orando, setOrando] = useState(false);
 
   const urgenciaColors = {
-    baja: 'bg-green-100 text-green-800',
-    media: 'bg-yellow-100 text-yellow-800',
-    alta: 'bg-orange-100 text-orange-800',
-    critica: 'bg-red-100 text-red-800'
+    baja: 'bg-green-900 text-green-200 border-green-700',
+    media: 'bg-yellow-900 text-yellow-200 border-yellow-700',
+    alta: 'bg-orange-900 text-orange-200 border-orange-700',
+    critica: 'bg-red-900 text-red-200 border-red-700'
   };
 
   const categoriaIcons = {
@@ -248,24 +478,24 @@ const MisionCard = ({ mision, currentUser, onUpdate }) => {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition p-6 space-y-4">
+    <div className="bg-gray-800 rounded-xl shadow-lg hover:shadow-2xl transition p-6 space-y-4 border border-gray-700">
       <div className="flex items-start justify-between">
         <div className="flex items-center space-x-2">
           <span className="text-2xl">{categoriaIcons[mision.categoria]}</span>
-          <span className={`px-3 py-1 rounded-full text-xs font-medium ${urgenciaColors[mision.nivel_urgencia]}`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${urgenciaColors[mision.nivel_urgencia]}`}>
             {mision.nivel_urgencia}
           </span>
         </div>
-        <span className="text-sm text-gray-500">{mision.total_oraciones} 🙏</span>
+        <span className="text-sm text-yellow-300">{mision.total_oraciones} 🙏</span>
       </div>
 
       <div>
-        <h3 className="font-bold text-lg text-gray-900 mb-2">{mision.titulo}</h3>
-        <p className="text-gray-600 text-sm line-clamp-3">{mision.descripcion}</p>
+        <h3 className="font-bold text-lg text-yellow-200 mb-2">{mision.titulo}</h3>
+        <p className="text-yellow-300 text-sm line-clamp-3 opacity-90">{mision.descripcion}</p>
       </div>
 
-      <div className="flex items-center space-x-2 text-sm text-gray-500">
-        <div className="w-8 h-8 bg-gradient-to-br from-purple-400 to-blue-400 rounded-full flex items-center justify-center text-white font-bold">
+      <div className="flex items-center space-x-2 text-sm text-yellow-300">
+        <div className="w-8 h-8 bg-gradient-to-br from-blue-700 to-blue-900 rounded-full flex items-center justify-center text-yellow-200 font-bold border border-blue-600">
           {mision.nombre_usuario.charAt(0)}
         </div>
         <span>{mision.nombre_usuario}</span>
@@ -276,8 +506,8 @@ const MisionCard = ({ mision, currentUser, onUpdate }) => {
         disabled={orando}
         className={`w-full py-3 rounded-lg font-semibold transition ${
           orando
-            ? 'bg-green-500 text-white'
-            : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'
+            ? 'bg-green-800 text-green-200 border border-green-600'
+            : 'bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 hover:from-blue-600 hover:to-blue-800 border border-blue-600'
         }`}
       >
         {orando ? '¡Oración enviada! ✨' : 'Orar por esta misión'}
@@ -321,29 +551,29 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        <h2 className="text-2xl font-bold mb-6 text-gray-900">Comparte tu misión de oración</h2>
+      <div className="bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
+        <h2 className="text-2xl font-bold mb-6 text-yellow-200">Comparte tu misión de oración</h2>
         
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Título de tu petición</label>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">Título de tu petición</label>
             <input
               type="text"
               value={formData.titulo}
               onChange={(e) => setFormData({...formData, titulo: e.target.value})}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-              placeholder="Ej: Sanidad para mi madre"
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              placeholder="Ej: Renovación de visa misionera"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Descripción</label>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">Descripción</label>
             <textarea
               value={formData.descripcion}
               onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
               rows="4"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
               placeholder="Comparte los detalles de tu petición..."
               required
             />
@@ -351,11 +581,11 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Categoría</label>
+              <label className="block text-sm font-semibold text-yellow-200 mb-2">Categoría</label>
               <select
                 value={formData.categoria}
                 onChange={(e) => setFormData({...formData, categoria: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
               >
                 <option value="apoyo_financiero">💰 Apoyo Financiero</option>
                 <option value="visa_permiso">📋 Visa/Permiso</option>
@@ -369,11 +599,11 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Urgencia</label>
+              <label className="block text-sm font-semibold text-yellow-200 mb-2">Urgencia</label>
               <select
                 value={formData.nivel_urgencia}
                 onChange={(e) => setFormData({...formData, nivel_urgencia: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
               >
                 <option value="baja">Baja</option>
                 <option value="media">Media</option>
@@ -389,16 +619,16 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
               id="publico"
               checked={formData.publico}
               onChange={(e) => setFormData({...formData, publico: e.target.checked})}
-              className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+              className="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
             />
-            <label htmlFor="publico" className="text-sm text-gray-700">
+            <label htmlFor="publico" className="text-sm text-yellow-200">
               Compartir públicamente (todos podrán orar por esta misión)
             </label>
           </div>
 
           <button
             type="submit"
-            className="w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-blue-700 transition shadow-lg"
+            className="w-full py-4 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-bold rounded-lg hover:from-blue-600 hover:to-blue-800 transition shadow-lg border border-blue-600"
           >
             Crear Misión de Oración
           </button>
@@ -415,10 +645,10 @@ const CirculosView = ({ circulos, currentUser, onUpdate }) => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Mis Círculos de Oración</h2>
+        <h2 className="text-2xl font-bold text-yellow-200">Mis Círculos de Oración</h2>
         <button
           onClick={() => setShowNewCircle(true)}
-          className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-blue-700 transition"
+          className="px-6 py-3 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-semibold rounded-lg hover:from-blue-600 hover:to-blue-800 transition border border-blue-600"
         >
           + Crear Círculo
         </button>
@@ -426,20 +656,20 @@ const CirculosView = ({ circulos, currentUser, onUpdate }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {circulos.map(circulo => (
-          <div key={circulo.id} className="bg-white rounded-xl shadow-md p-6 hover:shadow-xl transition">
+          <div key={circulo.id} className="bg-gray-800 rounded-xl shadow-lg p-6 hover:shadow-2xl transition border border-gray-700">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="font-bold text-xl text-gray-900">{circulo.nombre}</h3>
-                <p className="text-gray-600 text-sm mt-1">{circulo.descripcion}</p>
+                <h3 className="font-bold text-xl text-yellow-200">{circulo.nombre}</h3>
+                <p className="text-yellow-300 text-sm mt-1 opacity-90">{circulo.descripcion}</p>
               </div>
-              <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+              <span className="px-3 py-1 bg-blue-900 text-blue-200 rounded-full text-xs font-medium border border-blue-700">
                 {circulo.total_miembros} miembros
               </span>
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t">
-              <span className="text-sm text-gray-500">Código: {circulo.codigo_invitacion}</span>
-              <button className="px-4 py-2 text-purple-600 font-medium hover:bg-purple-50 rounded-lg transition">
+            <div className="flex items-center justify-between pt-4 border-t border-gray-700">
+              <span className="text-sm text-yellow-300">Código: {circulo.codigo_invitacion}</span>
+              <button className="px-4 py-2 text-blue-300 font-medium hover:bg-gray-700 rounded-lg transition">
                 Ver círculo →
               </button>
             </div>
@@ -448,10 +678,10 @@ const CirculosView = ({ circulos, currentUser, onUpdate }) => {
       </div>
 
       {circulos.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-xl">
-          <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 text-lg">Aún no tienes círculos de oración</p>
-          <p className="text-gray-400 mt-2">Crea uno para comenzar a orar en comunidad</p>
+        <div className="text-center py-12 bg-gray-800 rounded-xl border border-gray-700">
+          <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <p className="text-yellow-300 text-lg">Aún no tienes círculos de oración</p>
+          <p className="text-yellow-400 opacity-75 mt-2">Crea uno para comenzar a orar en comunidad</p>
         </div>
       )}
     </div>
@@ -460,37 +690,37 @@ const CirculosView = ({ circulos, currentUser, onUpdate }) => {
 
 // Estadisticas View
 const EstadisticasView = ({ stats }) => {
-  if (!stats) return <div className="text-center">Cargando estadísticas...</div>;
+  if (!stats) return <div className="text-center text-yellow-200">Cargando estadísticas...</div>;
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Mis Estadísticas</h2>
+      <h2 className="text-2xl font-bold text-yellow-200">Mis Estadísticas</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
           icon="🙏"
           label="Oraciones"
           value={stats.total_oraciones || 0}
-          color="from-purple-500 to-purple-700"
+          color="from-blue-700 to-blue-900"
         />
         <StatCard
           icon="🎯"
           label="Mis Misiones"
           value={stats.total_misiones || 0}
-          color="from-blue-500 to-blue-700"
+          color="from-blue-800 to-gray-900"
         />
         <StatCard
           icon="✅"
           label="Respondidas"
           value={stats.misiones_respondidas || 0}
-          color="from-green-500 to-green-700"
+          color="from-green-800 to-green-950"
         />
       </div>
 
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <h3 className="font-bold text-lg mb-4">Progreso de Oración</h3>
+      <div className="bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-700">
+        <h3 className="font-bold text-lg mb-4 text-yellow-200">Progreso de Oración</h3>
         <div className="space-y-3">
-          <ProgressBar label="Oraciones este mes" current={stats.total_oraciones} goal={100} color="purple" />
+          <ProgressBar label="Oraciones este mes" current={stats.total_oraciones} goal={100} color="blue" />
           <ProgressBar label="Meta anual" current={stats.total_oraciones} goal={365} color="blue" />
         </div>
       </div>
@@ -499,7 +729,7 @@ const EstadisticasView = ({ stats }) => {
 };
 
 const StatCard = ({ icon, label, value, color }) => (
-  <div className={`bg-gradient-to-br ${color} rounded-xl p-6 text-white shadow-lg`}>
+  <div className={`bg-gradient-to-br ${color} rounded-xl p-6 text-yellow-200 shadow-lg border border-blue-700`}>
     <div className="text-3xl mb-2">{icon}</div>
     <div className="text-3xl font-bold mb-1">{value}</div>
     <div className="text-sm opacity-90">{label}</div>
@@ -512,12 +742,12 @@ const ProgressBar = ({ label, current, goal, color }) => {
   return (
     <div>
       <div className="flex justify-between text-sm mb-2">
-        <span className="text-gray-700 font-medium">{label}</span>
-        <span className="text-gray-500">{current} / {goal}</span>
+        <span className="text-yellow-200 font-medium">{label}</span>
+        <span className="text-yellow-300">{current} / {goal}</span>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-3">
+      <div className="w-full bg-gray-700 rounded-full h-3">
         <div
-          className={`bg-gradient-to-r from-${color}-500 to-${color}-700 h-3 rounded-full transition-all duration-500`}
+          className={`bg-gradient-to-r from-${color}-600 to-${color}-800 h-3 rounded-full transition-all duration-500`}
           style={{ width: `${percentage}%` }}
         />
       </div>
