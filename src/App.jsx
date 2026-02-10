@@ -24,16 +24,16 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && currentUser) {
       loadMisiones();
       loadCirculos();
       loadEstadisticas();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUser]);
 
   const loadMisiones = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/misiones?publico=1`);
+      const response = await fetch(`${API_BASE_URL}?endpoint=misiones&publico=1`);
       const data = await response.json();
       if (data.success) {
         setMisiones(data.data);
@@ -45,7 +45,7 @@ function App() {
 
   const loadCirculos = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/circulos?usuario_id=${currentUser.id}`);
+      const response = await fetch(`${API_BASE_URL}?endpoint=circulos&usuario_id=${currentUser.id}`);
       const data = await response.json();
       if (data.success) {
         setCirculos(data.data);
@@ -57,7 +57,7 @@ function App() {
 
   const loadEstadisticas = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/estadisticas/${currentUser.id}`);
+      const response = await fetch(`${API_BASE_URL}?endpoint=estadisticas&id=${currentUser.id}`);
       const data = await response.json();
       if (data.success) {
         setEstadisticas(data.data);
@@ -181,7 +181,7 @@ const AuthView = ({ onLogin }) => {
     try {
       if (isLogin) {
         // Login
-        const response = await fetch(`${API_BASE_URL}/usuarios`);
+        const response = await fetch(`${API_BASE_URL}?endpoint=usuarios`);
         const data = await response.json();
         
         if (data.success) {
@@ -196,7 +196,7 @@ const AuthView = ({ onLogin }) => {
         }
       } else {
         // Signup
-        const response = await fetch(`${API_BASE_URL}/usuarios`, {
+        const response = await fetch(`${API_BASE_URL}?endpoint=usuarios`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -456,7 +456,7 @@ const MisionCard = ({ mision, currentUser, onUpdate }) => {
   const handleOrar = async () => {
     setOrando(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/oraciones`, {
+      const response = await fetch(`${API_BASE_URL}?endpoint=oraciones`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -531,7 +531,7 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
     e.preventDefault();
     
     try {
-      const response = await fetch(`${API_BASE_URL}/misiones`, {
+      const response = await fetch(`${API_BASE_URL}?endpoint=misiones`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
