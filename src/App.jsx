@@ -195,16 +195,24 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
   const messagesEndRef = useRef(null);
   const pollIntervalRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // const scrollToBottom = () => {
+  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // };
 
   const loadMessages = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}?endpoint=prayer_room&id=${mision.id}`);
+      const url = `${API_BASE_URL}?endpoint=prayer_room&id=${mision.id}`;
+      console.log('Fetching messages from:', url); // DEBUG
+      
+      const response = await fetch(url);
       const data = await response.json();
+      
+      console.log('Messages response:', data); // DEBUG
+      
       if (data.success) {
-        setMessages(data.data);
+        setMessages(data.data || []);
+      } else {
+        console.error('Failed to load messages:', data.message);
       }
     } catch (error) {
       console.error('Error loading messages:', error);
@@ -213,8 +221,8 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
 
   useEffect(() => {
     loadMessages();
-    // Poll for new messages every 3 seconds
-    pollIntervalRef.current = setInterval(loadMessages, 3000);
+    // Poll for new messages every 2 seconds
+    pollIntervalRef.current = setInterval(loadMessages, 2000);
     
     return () => {
       if (pollIntervalRef.current) {
@@ -223,9 +231,9 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
     };
   }, [mision.id]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  // useEffect(() => {
+  //   scrollToBottom();
+  // }, [messages]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -233,6 +241,12 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
 
     setSending(true);
     try {
+      console.log('Sending prayer:', {
+        mision_id: mision.id,
+        usuario_id: currentUser.id,
+        mensaje: newMessage.trim()
+      }); // DEBUG
+
       const response = await fetch(`${API_BASE_URL}?endpoint=prayer_room`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -244,12 +258,19 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
       });
 
       const data = await response.json();
+      console.log('Send prayer response:', data); // DEBUG
+      
       if (data.success) {
         setNewMessage('');
-        loadMessages(); // Reload messages immediately
+        // Force immediate reload
+        await loadMessages();
+      } else {
+        console.error('Failed to send prayer:', data.message);
+        alert('Error al enviar oración: ' + data.message);
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      alert('Error de conexión al enviar oración');
     } finally {
       setSending(false);
     }
