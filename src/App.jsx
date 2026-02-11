@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Home, PlusCircle, Users, BarChart3, Book, Bell, Menu, X, LogOut } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Home, PlusCircle, Users, BarChart3, Book, Bell, Menu, X, LogOut, Send, ArrowLeft } from 'lucide-react';
 
 // API Configuration
 const API_BASE_URL = 'https://selahcreativeservices.com/suplica-backend/api.php';
@@ -12,6 +12,7 @@ function App() {
   const [circulos, setCirculos] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [selectedMision, setSelectedMision] = useState(null);
 
   // Check if user is logged in on mount
   useEffect(() => {
@@ -78,11 +79,35 @@ function App() {
     setIsAuthenticated(false);
     localStorage.removeItem('supplica_user');
     setCurrentView('home');
+    setSelectedMision(null);
+  };
+
+  const handleOpenPrayerRoom = (mision) => {
+    setSelectedMision(mision);
+    setCurrentView('prayer-room');
+  };
+
+  const handleClosePrayerRoom = () => {
+    setSelectedMision(null);
+    setCurrentView('home');
+    loadMisiones(); // Reload to update prayer counts
   };
 
   // Show login/signup if not authenticated
   if (!isAuthenticated) {
     return <AuthView onLogin={handleLogin} />;
+  }
+
+  // Show prayer room if a mission is selected
+  if (currentView === 'prayer-room' && selectedMision) {
+    return (
+      <PrayerRoomView 
+        mision={selectedMision} 
+        currentUser={currentUser} 
+        onClose={handleClosePrayerRoom}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   return (
@@ -116,10 +141,10 @@ function App() {
               >
                 <LogOut className="w-5 h-5" />
               </button>
-              {/* <button className="relative p-2 hover:bg-blue-800 rounded-full transition">
+              <button className="relative p-2 hover:bg-blue-800 rounded-full transition">
                 <Bell className="w-5 h-5 text-yellow-200" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button> */}
+              </button>
               <button 
                 className="md:hidden p-2"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -145,7 +170,7 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {currentView === 'home' && <HomeView misiones={misiones} currentUser={currentUser} onUpdate={loadMisiones} />}
+        {currentView === 'home' && <HomeView misiones={misiones} currentUser={currentUser} onUpdate={loadMisiones} onOpenPrayerRoom={handleOpenPrayerRoom} />}
         {currentView === 'nueva' && <NuevaMisionView currentUser={currentUser} onCreated={() => { loadMisiones(); setCurrentView('home'); }} />}
         {currentView === 'circulos' && <CirculosView circulos={circulos} currentUser={currentUser} onUpdate={loadCirculos} />}
         {currentView === 'stats' && <EstadisticasView stats={estadisticas} />}
@@ -161,6 +186,196 @@ function App() {
     </div>
   );
 }
+
+// Prayer Room View
+const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef(null);
+  const pollIntervalRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const loadMessages = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}?endpoint=prayer_room&id=${mision.id}`);
+      const data = await response.json();
+      if (data.success) {
+        setMessages(data.data);
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadMessages();
+    // Poll for new messages every 3 seconds
+    pollIntervalRef.current = setInterval(loadMessages, 3000);
+    
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [mision.id]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || sending) return;
+
+    setSending(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}?endpoint=prayer_room`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mision_id: mision.id,
+          usuario_id: currentUser.id,
+          mensaje: newMessage.trim()
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setNewMessage('');
+        loadMessages(); // Reload messages immediately
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const categoriaIcons = {
+    apoyo_financiero: '💰',
+    visa_permiso: '📋',
+    salud_seguridad: '🏥',
+    plantacion_iglesia: '⛪',
+    idioma_cultura: '🗣️',
+    ninos_educacion: '👨‍👩‍👧‍👦',
+    socios_oracion: '🙏',
+    otro: '✝️'
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 flex flex-col">
+      {/* Header */}
+      <header className="bg-blue-900 shadow-lg">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={onClose}
+              className="flex items-center space-x-2 text-yellow-200 hover:text-yellow-100 transition"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span className="font-semibold">Volver</span>
+            </button>
+            
+            <button 
+              onClick={onLogout}
+              className="p-2 hover:bg-blue-800 rounded-full transition text-yellow-200"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Mission Header */}
+      <div className="bg-gradient-to-r from-blue-800 to-blue-900 border-b border-blue-700">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <div className="flex items-start space-x-3">
+            <span className="text-4xl">{categoriaIcons[mision.categoria]}</span>
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold text-yellow-200 mb-2">{mision.titulo}</h2>
+              <p className="text-yellow-300 text-sm opacity-90">{mision.descripcion}</p>
+              <div className="mt-3 flex items-center space-x-4 text-sm text-yellow-300">
+                <span>👤 {mision.nombre_usuario}</span>
+                <span>🙏 {messages.length} oraciones</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto bg-gray-900">
+        <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-yellow-300 text-lg mb-2">Sé el primero en orar por esta misión</p>
+              <p className="text-yellow-400 opacity-75 text-sm">Escribe tu oración abajo para comenzar</p>
+            </div>
+          )}
+
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${msg.usuario_id === currentUser.id ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-md rounded-2xl px-4 py-3 ${
+                  msg.usuario_id === currentUser.id
+                    ? 'bg-blue-800 text-yellow-200'
+                    : 'bg-gray-800 text-yellow-200'
+                }`}
+              >
+                <div className="flex items-center space-x-2 mb-1">
+                  <div className="w-6 h-6 bg-gradient-to-br from-blue-600 to-blue-900 rounded-full flex items-center justify-center text-yellow-200 text-xs font-bold border border-blue-500">
+                    {msg.nombre_usuario.charAt(0)}
+                  </div>
+                  <span className="text-xs font-semibold opacity-90">{msg.nombre_usuario}</span>
+                </div>
+                <p className="text-sm leading-relaxed">{msg.mensaje}</p>
+                <p className="text-xs opacity-75 mt-1">
+                  {new Date(msg.fecha_creacion).toLocaleTimeString('es-ES', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              </div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {/* Input Area */}
+      <div className="bg-gray-800 border-t border-gray-700">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <form onSubmit={handleSendMessage} className="flex space-x-3">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Escribe tu oración aquí..."
+              className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              disabled={sending}
+            />
+            <button
+              type="submit"
+              disabled={sending || !newMessage.trim()}
+              className="px-6 py-3 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-semibold rounded-lg hover:from-blue-600 hover:to-blue-800 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            >
+              <Send className="w-5 h-5" />
+              <span className="hidden sm:inline">Enviar</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Authentication View
 const AuthView = ({ onLogin }) => {
@@ -188,7 +403,6 @@ const AuthView = ({ onLogin }) => {
           const user = data.data.find(u => u.email === formData.email);
           
           if (user) {
-            // In production, you'd verify password hash here
             onLogin(user);
           } else {
             setError('Email o contraseña incorrectos');
@@ -210,7 +424,6 @@ const AuthView = ({ onLogin }) => {
         const data = await response.json();
         
         if (data.success) {
-          // Auto-login after signup
           const newUser = {
             id: data.id,
             nombre: formData.nombre,
@@ -232,7 +445,6 @@ const AuthView = ({ onLogin }) => {
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
       <div className="max-w-md w-full">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-800 p-4 rounded-2xl mb-4">
             <Book className="w-12 h-12 text-yellow-200" />
@@ -241,15 +453,12 @@ const AuthView = ({ onLogin }) => {
           <p className="text-yellow-300 text-lg">Comunidad de Oración Misionera</p>
         </div>
 
-        {/* Auth Card */}
         <div className="bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
           <div className="flex mb-6">
             <button
               onClick={() => setIsLogin(true)}
               className={`flex-1 py-3 font-semibold rounded-lg transition ${
-                isLogin
-                  ? 'bg-blue-800 text-yellow-200'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                isLogin ? 'bg-blue-800 text-yellow-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
               }`}
             >
               Iniciar Sesión
@@ -257,9 +466,7 @@ const AuthView = ({ onLogin }) => {
             <button
               onClick={() => setIsLogin(false)}
               className={`flex-1 py-3 font-semibold rounded-lg transition ml-2 ${
-                !isLogin
-                  ? 'bg-blue-800 text-yellow-200'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                !isLogin ? 'bg-blue-800 text-yellow-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
               }`}
             >
               Registrarse
@@ -350,9 +557,7 @@ const NavButton = ({ icon: Icon, label, active, onClick }) => (
   <button
     onClick={onClick}
     className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${
-      active 
-        ? 'bg-blue-700 text-yellow-200' 
-        : 'text-yellow-300 hover:bg-blue-800'
+      active ? 'bg-blue-700 text-yellow-200' : 'text-yellow-300 hover:bg-blue-800'
     }`}
   >
     <Icon className="w-5 h-5" />
@@ -371,7 +576,7 @@ const MobileNavButton = ({ icon: Icon, label, onClick }) => (
 );
 
 // Home View
-const HomeView = ({ misiones, currentUser, onUpdate }) => {
+const HomeView = ({ misiones, currentUser, onUpdate, onOpenPrayerRoom }) => {
   const [filter, setFilter] = useState('todas');
 
   const filteredMisiones = misiones.filter(m => {
@@ -382,7 +587,6 @@ const HomeView = ({ misiones, currentUser, onUpdate }) => {
 
   return (
     <div className="space-y-6">
-      {/* Hero Section */}
       <div className="bg-gradient-to-r from-blue-800 via-blue-900 to-blue-800 rounded-2xl p-8 shadow-xl border border-blue-700">
         <h2 className="text-3xl font-bold mb-2 text-yellow-200">Oremos juntos por nuestras misiones</h2>
         <p className="text-yellow-300 text-lg">
@@ -390,7 +594,6 @@ const HomeView = ({ misiones, currentUser, onUpdate }) => {
         </p>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-2">
         <FilterButton label="Todas" active={filter === 'todas'} onClick={() => setFilter('todas')} />
         <FilterButton label="Mis Misiones" active={filter === 'mis-misiones'} onClick={() => setFilter('mis-misiones')} />
@@ -403,10 +606,15 @@ const HomeView = ({ misiones, currentUser, onUpdate }) => {
         <FilterButton label="Socios Oración" active={filter === 'socios_oracion'} onClick={() => setFilter('socios_oracion')} />
       </div>
 
-      {/* Mission Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredMisiones.map(mision => (
-          <MisionCard key={mision.id} mision={mision} currentUser={currentUser} onUpdate={onUpdate} />
+          <MisionCard 
+            key={mision.id} 
+            mision={mision} 
+            currentUser={currentUser} 
+            onUpdate={onUpdate}
+            onOpenPrayerRoom={onOpenPrayerRoom}
+          />
         ))}
       </div>
 
@@ -432,9 +640,7 @@ const FilterButton = ({ label, active, onClick }) => (
   </button>
 );
 
-const MisionCard = ({ mision, currentUser, onUpdate }) => {
-  const [orando, setOrando] = useState(false);
-
+const MisionCard = ({ mision, currentUser, onUpdate, onOpenPrayerRoom }) => {
   const urgenciaColors = {
     baja: 'bg-green-900 text-green-200 border-green-700',
     media: 'bg-yellow-900 text-yellow-200 border-yellow-700',
@@ -451,30 +657,6 @@ const MisionCard = ({ mision, currentUser, onUpdate }) => {
     ninos_educacion: '👨‍👩‍👧‍👦',
     socios_oracion: '🙏',
     otro: '✝️'
-  };
-
-  const handleOrar = async () => {
-    setOrando(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}?endpoint=oraciones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mision_id: mision.id,
-          usuario_id: currentUser.id,
-          mensaje: `Orando por: ${mision.titulo}`
-        })
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        onUpdate();
-        setTimeout(() => setOrando(false), 2000);
-      }
-    } catch (error) {
-      console.error('Error al orar:', error);
-      setOrando(false);
-    }
   };
 
   return (
@@ -502,21 +684,16 @@ const MisionCard = ({ mision, currentUser, onUpdate }) => {
       </div>
 
       <button
-        onClick={handleOrar}
-        disabled={orando}
-        className={`w-full py-3 rounded-lg font-semibold transition ${
-          orando
-            ? 'bg-green-800 text-green-200 border border-green-600'
-            : 'bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 hover:from-blue-600 hover:to-blue-800 border border-blue-600'
-        }`}
+        onClick={() => onOpenPrayerRoom(mision)}
+        className="w-full py-3 rounded-lg font-semibold transition bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 hover:from-blue-600 hover:to-blue-800 border border-blue-600"
       >
-        {orando ? '¡Oración enviada! ✨' : 'Orar por esta misión'}
+        Orar por esta misión
       </button>
     </div>
   );
 };
 
-// Nueva Mision View
+// Nueva Mision View - Keep existing code
 const NuevaMisionView = ({ currentUser, onCreated }) => {
   const [formData, setFormData] = useState({
     titulo: '',
@@ -638,7 +815,7 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
   );
 };
 
-// Circulos View
+// Circulos View - Keep existing
 const CirculosView = ({ circulos, currentUser, onUpdate }) => {
   const [showNewCircle, setShowNewCircle] = useState(false);
 
@@ -688,7 +865,7 @@ const CirculosView = ({ circulos, currentUser, onUpdate }) => {
   );
 };
 
-// Estadisticas View
+// Estadisticas View - Keep existing
 const EstadisticasView = ({ stats }) => {
   if (!stats) return <div className="text-center text-yellow-200">Cargando estadísticas...</div>;
 
