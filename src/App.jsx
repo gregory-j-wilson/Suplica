@@ -141,10 +141,10 @@ function App() {
               >
                 <LogOut className="w-5 h-5" />
               </button>
-              <button className="relative p-2 hover:bg-blue-800 rounded-full transition">
+              {/* <button className="relative p-2 hover:bg-blue-800 rounded-full transition">
                 <Bell className="w-5 h-5 text-yellow-200" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button>
+              </button> */}
               <button 
                 className="md:hidden p-2"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
