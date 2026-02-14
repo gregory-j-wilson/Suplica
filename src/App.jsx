@@ -14,7 +14,6 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedMision, setSelectedMision] = useState(null);
 
-  // Check if user is logged in on mount
   useEffect(() => {
     const savedUser = localStorage.getItem('supplica_user');
     if (savedUser) {
@@ -90,15 +89,13 @@ function App() {
   const handleClosePrayerRoom = () => {
     setSelectedMision(null);
     setCurrentView('home');
-    loadMisiones(); // Reload to update prayer counts
+    loadMisiones();
   };
 
-  // Show login/signup if not authenticated
   if (!isAuthenticated) {
     return <AuthView onLogin={handleLogin} />;
   }
 
-  // Show prayer room if a mission is selected
   if (currentView === 'prayer-room' && selectedMision) {
     return (
       <PrayerRoomView 
@@ -112,7 +109,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      {/* Header */}
       <header className="bg-blue-900 shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
@@ -120,9 +116,7 @@ function App() {
               <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-2 rounded-xl">
                 <Book className="w-6 h-6 text-yellow-200" />
               </div>
-              <h1 className="text-2xl font-bold text-yellow-200">
-                Súplica
-              </h1>
+              <h1 className="text-2xl font-bold text-yellow-200">Súplica</h1>
             </div>
             
             <nav className="hidden md:flex space-x-8">
@@ -134,27 +128,19 @@ function App() {
 
             <div className="flex items-center space-x-4">
               <span className="text-yellow-200 text-sm hidden md:block">{currentUser?.nombre}</span>
-              <button 
-                onClick={handleLogout}
-                className="p-2 hover:bg-blue-800 rounded-full transition text-yellow-200"
-                title="Cerrar sesión"
-              >
+              <button onClick={handleLogout} className="p-2 hover:bg-blue-800 rounded-full transition text-yellow-200" title="Cerrar sesión">
                 <LogOut className="w-5 h-5" />
               </button>
               {/* <button className="relative p-2 hover:bg-blue-800 rounded-full transition">
                 <Bell className="w-5 h-5 text-yellow-200" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </button> */}
-              <button 
-                className="md:hidden p-2"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              >
+              <button className="md:hidden p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
                 {mobileMenuOpen ? <X className="w-6 h-6 text-yellow-200" /> : <Menu className="w-6 h-6 text-yellow-200" />}
               </button>
             </div>
           </div>
 
-          {/* Mobile Menu */}
           {mobileMenuOpen && (
             <div className="md:hidden py-4 border-t border-blue-800">
               <div className="flex flex-col space-y-2">
@@ -168,7 +154,6 @@ function App() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentView === 'home' && <HomeView misiones={misiones} currentUser={currentUser} onUpdate={loadMisiones} onOpenPrayerRoom={handleOpenPrayerRoom} />}
         {currentView === 'nueva' && <NuevaMisionView currentUser={currentUser} onCreated={() => { loadMisiones(); setCurrentView('home'); }} />}
@@ -176,7 +161,6 @@ function App() {
         {currentView === 'stats' && <EstadisticasView stats={estadisticas} />}
       </main>
 
-      {/* Footer */}
       <footer className="bg-blue-900 mt-12 py-6">
         <div className="max-w-7xl mx-auto px-4 text-center text-yellow-200 text-sm">
           <p>Súplica - Comunidad de Oración para Misioneros Bautistas</p>
@@ -192,85 +176,106 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const messagesEndRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(true);
   const pollIntervalRef = useRef(null);
-
-  // const scrollToBottom = () => {
-  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  // };
+  const isSendingRef = useRef(false); // Track if we're sending
 
   const loadMessages = async () => {
-    try {
-      const url = `${API_BASE_URL}?endpoint=prayer_room&id=${mision.id}`;
-      console.log('Fetching messages from:', url); // DEBUG
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      console.log('Messages response:', data); // DEBUG
-      
-      if (data.success) {
-        setMessages(data.data || []);
-      } else {
-        console.error('Failed to load messages:', data.message);
+  if (isSendingRef.current) {
+    return;
+  }
+
+  try {
+    // Add timestamp to prevent caching
+    const timestamp = new Date().getTime();
+    const url = `${API_BASE_URL}?endpoint=prayer_room&id=${mision.id}&t=${timestamp}`;
+    console.log('Fetching prayers from:', url);
+
+    const response = await fetch(url, {
+      cache: 'no-store',  // Prevent browser caching
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
       }
-    } catch (error) {
-      console.error('Error loading messages:', error);
+    });
+    
+    const data = await response.json();
+    console.log('Prayer response:', data);
+    
+    if (data.success && Array.isArray(data.data)) {
+      setMessages(data.data);
+      console.log('Updated messages state:', data.data.length, 'prayers');
     }
-  };
+    setIsLoading(false);
+  } catch (error) {
+    console.error('Error loading messages:', error);
+    setIsLoading(false);
+  }
+};
 
   useEffect(() => {
     loadMessages();
-    // Poll for new messages every 2 seconds
-    pollIntervalRef.current = setInterval(loadMessages, 2000);
-    
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
+    const interval = setInterval(() => {
+      // Only poll if not sending
+      if (!isSendingRef.current) {
+        loadMessages();
       }
-    };
+    }, 2000);
+    pollIntervalRef.current = interval;
+    
+    return () => clearInterval(interval);
   }, [mision.id]);
-
-  // useEffect(() => {
-  //   scrollToBottom();
-  // }, [messages]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || sending) return;
 
-    setSending(true);
-    try {
-      console.log('Sending prayer:', {
-        mision_id: mision.id,
-        usuario_id: currentUser.id,
-        mensaje: newMessage.trim()
-      }); // DEBUG
+    // DEBUG: Log everything
+  console.log('=== SENDING PRAYER ===');
+  console.log('Mission:', mision);
+  console.log('Mission ID:', mision.id);
+  console.log('User ID:', currentUser.id);
+  console.log('Message:', newMessage.trim());
+  console.log('API URL:', API_BASE_URL);
+  console.log('=====================');
 
+    const messageText = newMessage.trim();
+    setSending(true);
+    isSendingRef.current = true; // Pause polling
+    setNewMessage('');
+
+    try {
       const response = await fetch(`${API_BASE_URL}?endpoint=prayer_room`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mision_id: mision.id,
           usuario_id: currentUser.id,
-          mensaje: newMessage.trim()
+          mensaje: messageText
         })
       });
 
       const data = await response.json();
-      console.log('Send prayer response:', data); // DEBUG
       
-      if (data.success) {
-        setNewMessage('');
-        // Force immediate reload
-        await loadMessages();
+      if (data.success && data.data) {
+        // Add message to state immediately
+        setMessages(prev => [...prev, data.data]);
+        
+        // Wait a moment for backend to sync, then resume polling
+        setTimeout(() => {
+          isSendingRef.current = false;
+          loadMessages(); // Force one immediate reload
+        }, 500);
       } else {
-        console.error('Failed to send prayer:', data.message);
-        alert('Error al enviar oración: ' + data.message);
+        isSendingRef.current = false;
+        alert('Error al enviar oración');
+        setNewMessage(messageText);
       }
     } catch (error) {
-      console.error('Error sending message:', error);
-      alert('Error de conexión al enviar oración');
+      isSendingRef.current = false;
+      console.error('Error:', error);
+      alert('Error de conexión');
+      setNewMessage(messageText);
     } finally {
       setSending(false);
     }
@@ -289,30 +294,20 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col">
-      {/* Header */}
       <header className="bg-blue-900 shadow-lg">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <button
-              onClick={onClose}
-              className="flex items-center space-x-2 text-yellow-200 hover:text-yellow-100 transition"
-            >
+            <button onClick={onClose} className="flex items-center space-x-2 text-yellow-200 hover:text-yellow-100 transition">
               <ArrowLeft className="w-5 h-5" />
               <span className="font-semibold">Volver</span>
             </button>
-            
-            <button 
-              onClick={onLogout}
-              className="p-2 hover:bg-blue-800 rounded-full transition text-yellow-200"
-              title="Cerrar sesión"
-            >
+            <button onClick={onLogout} className="p-2 hover:bg-blue-800 rounded-full transition text-yellow-200" title="Cerrar sesión">
               <LogOut className="w-5 h-5" />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Mission Header */}
       <div className="bg-gradient-to-r from-blue-800 to-blue-900 border-b border-blue-700">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="flex items-start space-x-3">
@@ -329,10 +324,15 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
         </div>
       </div>
 
-      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
-          {messages.length === 0 && (
+          {isLoading && (
+            <div className="text-center py-12">
+              <p className="text-yellow-300">Cargando oraciones...</p>
+            </div>
+          )}
+
+          {!isLoading && messages.length === 0 && (
             <div className="text-center py-12">
               <p className="text-yellow-300 text-lg mb-2">Sé el primero en orar por esta misión</p>
               <p className="text-yellow-400 opacity-75 text-sm">Escribe tu oración abajo para comenzar</p>
@@ -340,17 +340,8 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
           )}
 
           {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex ${msg.usuario_id === currentUser.id ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-md rounded-2xl px-4 py-3 ${
-                  msg.usuario_id === currentUser.id
-                    ? 'bg-blue-800 text-yellow-200'
-                    : 'bg-gray-800 text-yellow-200'
-                }`}
-              >
+            <div key={msg.id} className={`flex ${msg.usuario_id === currentUser.id ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-md rounded-2xl px-4 py-3 ${msg.usuario_id === currentUser.id ? 'bg-blue-800 text-yellow-200' : 'bg-gray-800 text-yellow-200'}`}>
                 <div className="flex items-center space-x-2 mb-1">
                   <div className="w-6 h-6 bg-gradient-to-br from-blue-600 to-blue-900 rounded-full flex items-center justify-center text-yellow-200 text-xs font-bold border border-blue-500">
                     {msg.nombre_usuario.charAt(0)}
@@ -359,19 +350,14 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
                 </div>
                 <p className="text-sm leading-relaxed">{msg.mensaje}</p>
                 <p className="text-xs opacity-75 mt-1">
-                  {new Date(msg.fecha_creacion).toLocaleTimeString('es-ES', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
+                  {new Date(msg.fecha_creacion).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
             </div>
           ))}
-          <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Input Area */}
       <div className="bg-gray-800 border-t border-gray-700">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <form onSubmit={handleSendMessage} className="flex space-x-3">
@@ -389,7 +375,7 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
               className="px-6 py-3 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-semibold rounded-lg hover:from-blue-600 hover:to-blue-800 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
             >
               <Send className="w-5 h-5" />
-              <span className="hidden sm:inline">Enviar</span>
+              <span className="hidden sm:inline">{sending ? 'Enviando...' : 'Enviar'}</span>
             </button>
           </form>
         </div>
@@ -398,14 +384,11 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
   );
 };
 
-// Authentication View
+
+// Auth View
 const AuthView = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({
-    nombre: '',
-    email: '',
-    password: ''
-  });
+  const [formData, setFormData] = useState({ nombre: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -416,13 +399,11 @@ const AuthView = ({ onLogin }) => {
 
     try {
       if (isLogin) {
-        // Login
         const response = await fetch(`${API_BASE_URL}?endpoint=usuarios`);
         const data = await response.json();
         
         if (data.success) {
           const user = data.data.find(u => u.email === formData.email);
-          
           if (user) {
             onLogin(user);
           } else {
@@ -430,7 +411,6 @@ const AuthView = ({ onLogin }) => {
           }
         }
       } else {
-        // Signup
         const response = await fetch(`${API_BASE_URL}?endpoint=usuarios`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -445,18 +425,12 @@ const AuthView = ({ onLogin }) => {
         const data = await response.json();
         
         if (data.success) {
-          const newUser = {
-            id: data.id,
-            nombre: formData.nombre,
-            email: formData.email
-          };
-          onLogin(newUser);
+          onLogin({ id: data.id, nombre: formData.nombre, email: formData.email });
         } else {
           setError(data.message || 'Error al crear cuenta');
         }
       }
     } catch (error) {
-      console.error('Error:', error);
       setError('Error de conexión. Verifica que el backend esté funcionando.');
     } finally {
       setLoading(false);
@@ -476,20 +450,10 @@ const AuthView = ({ onLogin }) => {
 
         <div className="bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
           <div className="flex mb-6">
-            <button
-              onClick={() => setIsLogin(true)}
-              className={`flex-1 py-3 font-semibold rounded-lg transition ${
-                isLogin ? 'bg-blue-800 text-yellow-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-              }`}
-            >
+            <button onClick={() => setIsLogin(true)} className={`flex-1 py-3 font-semibold rounded-lg transition ${isLogin ? 'bg-blue-800 text-yellow-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
               Iniciar Sesión
             </button>
-            <button
-              onClick={() => setIsLogin(false)}
-              className={`flex-1 py-3 font-semibold rounded-lg transition ml-2 ${
-                !isLogin ? 'bg-blue-800 text-yellow-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-              }`}
-            >
+            <button onClick={() => setIsLogin(false)} className={`flex-1 py-3 font-semibold rounded-lg transition ml-2 ${!isLogin ? 'bg-blue-800 text-yellow-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
               Registrarse
             </button>
           </div>
@@ -497,77 +461,37 @@ const AuthView = ({ onLogin }) => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
-                <label className="block text-sm font-semibold text-yellow-200 mb-2">
-                  Nombre Completo
-                </label>
-                <input
-                  type="text"
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                  placeholder="Juan Pérez"
-                  required
-                />
+                <label className="block text-sm font-semibold text-yellow-200 mb-2">Nombre Completo</label>
+                <input type="text" value={formData.nombre} onChange={(e) => setFormData({ ...formData, nombre: e.target.value })} className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="Juan Pérez" required />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-semibold text-yellow-200 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                placeholder="tu@email.com"
-                required
-              />
+              <label className="block text-sm font-semibold text-yellow-200 mb-2">Email</label>
+              <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="tu@email.com" required />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-yellow-200 mb-2">
-                Contraseña
-              </label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                placeholder="••••••••"
-                required
-              />
+              <label className="block text-sm font-semibold text-yellow-200 mb-2">Contraseña</label>
+              <input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="••••••••" required />
             </div>
 
-            {error && (
-              <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-lg">
-                {error}
-              </div>
-            )}
+            {error && <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-lg">{error}</div>}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-bold rounded-lg hover:from-blue-600 hover:to-blue-800 transition shadow-lg disabled:opacity-50"
-            >
+            <button type="submit" disabled={loading} className="w-full py-4 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-bold rounded-lg hover:from-blue-600 hover:to-blue-800 transition shadow-lg disabled:opacity-50">
               {loading ? 'Procesando...' : (isLogin ? 'Iniciar Sesión' : 'Crear Cuenta')}
             </button>
           </form>
 
           <p className="text-center text-gray-400 text-sm mt-6">
             {isLogin ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-yellow-300 hover:text-yellow-200 font-semibold"
-            >
+            <button onClick={() => setIsLogin(!isLogin)} className="text-yellow-300 hover:text-yellow-200 font-semibold">
               {isLogin ? 'Regístrate aquí' : 'Inicia sesión'}
             </button>
           </p>
         </div>
 
-        <p className="text-center text-gray-500 text-sm mt-6">
-          Plataforma de oración para misioneros bautistas fundamentales
-        </p>
+        <p className="text-center text-gray-500 text-sm mt-6">Plataforma de oración para misioneros bautistas fundamentales</p>
       </div>
     </div>
   );
@@ -575,22 +499,14 @@ const AuthView = ({ onLogin }) => {
 
 // Navigation Components
 const NavButton = ({ icon: Icon, label, active, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${
-      active ? 'bg-blue-700 text-yellow-200' : 'text-yellow-300 hover:bg-blue-800'
-    }`}
-  >
+  <button onClick={onClick} className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${active ? 'bg-blue-700 text-yellow-200' : 'text-yellow-300 hover:bg-blue-800'}`}>
     <Icon className="w-5 h-5" />
     <span className="font-medium">{label}</span>
   </button>
 );
 
 const MobileNavButton = ({ icon: Icon, label, onClick }) => (
-  <button
-    onClick={onClick}
-    className="flex items-center space-x-3 px-4 py-3 hover:bg-blue-800 rounded-lg transition"
-  >
+  <button onClick={onClick} className="flex items-center space-x-3 px-4 py-3 hover:bg-blue-800 rounded-lg transition">
     <Icon className="w-5 h-5 text-yellow-300" />
     <span className="font-medium text-yellow-200">{label}</span>
   </button>
@@ -610,9 +526,7 @@ const HomeView = ({ misiones, currentUser, onUpdate, onOpenPrayerRoom }) => {
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-blue-800 via-blue-900 to-blue-800 rounded-2xl p-8 shadow-xl border border-blue-700">
         <h2 className="text-3xl font-bold mb-2 text-yellow-200">Oremos juntos por nuestras misiones</h2>
-        <p className="text-yellow-300 text-lg">
-          {misiones.length} peticiones activas esperando tu intercesión
-        </p>
+        <p className="text-yellow-300 text-lg">{misiones.length} peticiones activas esperando tu intercesión</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -629,13 +543,7 @@ const HomeView = ({ misiones, currentUser, onUpdate, onOpenPrayerRoom }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredMisiones.map(mision => (
-          <MisionCard 
-            key={mision.id} 
-            mision={mision} 
-            currentUser={currentUser} 
-            onUpdate={onUpdate}
-            onOpenPrayerRoom={onOpenPrayerRoom}
-          />
+          <MisionCard key={mision.id} mision={mision} currentUser={currentUser} onUpdate={onUpdate} onOpenPrayerRoom={onOpenPrayerRoom} />
         ))}
       </div>
 
@@ -649,14 +557,7 @@ const HomeView = ({ misiones, currentUser, onUpdate, onOpenPrayerRoom }) => {
 };
 
 const FilterButton = ({ label, active, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`px-4 py-2 rounded-full font-medium transition ${
-      active
-        ? 'bg-blue-800 text-yellow-200 shadow-md border border-blue-600'
-        : 'bg-gray-800 text-yellow-300 hover:bg-gray-700 border border-gray-700'
-    }`}
-  >
+  <button onClick={onClick} className={`px-4 py-2 rounded-full font-medium transition ${active ? 'bg-blue-800 text-yellow-200 shadow-md border border-blue-600' : 'bg-gray-800 text-yellow-300 hover:bg-gray-700 border border-gray-700'}`}>
     {label}
   </button>
 );
@@ -704,17 +605,14 @@ const MisionCard = ({ mision, currentUser, onUpdate, onOpenPrayerRoom }) => {
         <span>{mision.nombre_usuario}</span>
       </div>
 
-      <button
-        onClick={() => onOpenPrayerRoom(mision)}
-        className="w-full py-3 rounded-lg font-semibold transition bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 hover:from-blue-600 hover:to-blue-800 border border-blue-600"
-      >
+      <button onClick={() => onOpenPrayerRoom(mision)} className="w-full py-3 rounded-lg font-semibold transition bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 hover:from-blue-600 hover:to-blue-800 border border-blue-600">
         Orar por esta misión
       </button>
     </div>
   );
 };
 
-// Nueva Mision View - Keep existing code
+// Nueva Mision View
 const NuevaMisionView = ({ currentUser, onCreated }) => {
   const [formData, setFormData] = useState({
     titulo: '',
@@ -732,10 +630,7 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
       const response = await fetch(`${API_BASE_URL}?endpoint=misiones`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          usuario_id: currentUser.id
-        })
+        body: JSON.stringify({ ...formData, usuario_id: currentUser.id })
       });
       
       const data = await response.json();
@@ -755,36 +650,18 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-semibold text-yellow-200 mb-2">Título de tu petición</label>
-            <input
-              type="text"
-              value={formData.titulo}
-              onChange={(e) => setFormData({...formData, titulo: e.target.value})}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              placeholder="Ej: Renovación de visa misionera"
-              required
-            />
+            <input type="text" value={formData.titulo} onChange={(e) => setFormData({...formData, titulo: e.target.value})} className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="Ej: Renovación de visa misionera" required />
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-yellow-200 mb-2">Descripción</label>
-            <textarea
-              value={formData.descripcion}
-              onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
-              rows="4"
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              placeholder="Comparte los detalles de tu petición..."
-              required
-            />
+            <textarea value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} rows="4" className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="Comparte los detalles de tu petición..." required />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-yellow-200 mb-2">Categoría</label>
-              <select
-                value={formData.categoria}
-                onChange={(e) => setFormData({...formData, categoria: e.target.value})}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              >
+              <select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent">
                 <option value="apoyo_financiero">💰 Apoyo Financiero</option>
                 <option value="visa_permiso">📋 Visa/Permiso</option>
                 <option value="salud_seguridad">🏥 Salud/Seguridad</option>
@@ -798,11 +675,7 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
 
             <div>
               <label className="block text-sm font-semibold text-yellow-200 mb-2">Urgencia</label>
-              <select
-                value={formData.nivel_urgencia}
-                onChange={(e) => setFormData({...formData, nivel_urgencia: e.target.value})}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              >
+              <select value={formData.nivel_urgencia} onChange={(e) => setFormData({...formData, nivel_urgencia: e.target.value})} className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent">
                 <option value="baja">Baja</option>
                 <option value="media">Media</option>
                 <option value="alta">Alta</option>
@@ -812,22 +685,11 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
           </div>
 
           <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="publico"
-              checked={formData.publico}
-              onChange={(e) => setFormData({...formData, publico: e.target.checked})}
-              className="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
-            />
-            <label htmlFor="publico" className="text-sm text-yellow-200">
-              Compartir públicamente (todos podrán orar por esta misión)
-            </label>
+            <input type="checkbox" id="publico" checked={formData.publico} onChange={(e) => setFormData({...formData, publico: e.target.checked})} className="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500" />
+            <label htmlFor="publico" className="text-sm text-yellow-200">Compartir públicamente (todos podrán orar por esta misión)</label>
           </div>
 
-          <button
-            type="submit"
-            className="w-full py-4 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-bold rounded-lg hover:from-blue-600 hover:to-blue-800 transition shadow-lg border border-blue-600"
-          >
+          <button type="submit" className="w-full py-4 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-bold rounded-lg hover:from-blue-600 hover:to-blue-800 transition shadow-lg border border-blue-600">
             Crear Misión de Oración
           </button>
         </form>
@@ -836,18 +698,13 @@ const NuevaMisionView = ({ currentUser, onCreated }) => {
   );
 };
 
-// Circulos View - Keep existing
-const CirculosView = ({ circulos, currentUser, onUpdate }) => {
-  const [showNewCircle, setShowNewCircle] = useState(false);
-
+// Circulos View
+const CirculosView = ({ circulos }) => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-yellow-200">Mis Círculos de Oración</h2>
-        <button
-          onClick={() => setShowNewCircle(true)}
-          className="px-6 py-3 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-semibold rounded-lg hover:from-blue-600 hover:to-blue-800 transition border border-blue-600"
-        >
+        <button className="px-6 py-3 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-semibold rounded-lg hover:from-blue-600 hover:to-blue-800 transition border border-blue-600">
           + Crear Círculo
         </button>
       </div>
@@ -867,9 +724,7 @@ const CirculosView = ({ circulos, currentUser, onUpdate }) => {
 
             <div className="flex items-center justify-between pt-4 border-t border-gray-700">
               <span className="text-sm text-yellow-300">Código: {circulo.codigo_invitacion}</span>
-              <button className="px-4 py-2 text-blue-300 font-medium hover:bg-gray-700 rounded-lg transition">
-                Ver círculo →
-              </button>
+              <button className="px-4 py-2 text-blue-300 font-medium hover:bg-gray-700 rounded-lg transition">Ver círculo →</button>
             </div>
           </div>
         ))}
@@ -886,7 +741,7 @@ const CirculosView = ({ circulos, currentUser, onUpdate }) => {
   );
 };
 
-// Estadisticas View - Keep existing
+// Estadisticas View
 const EstadisticasView = ({ stats }) => {
   if (!stats) return <div className="text-center text-yellow-200">Cargando estadísticas...</div>;
 
@@ -895,24 +750,9 @@ const EstadisticasView = ({ stats }) => {
       <h2 className="text-2xl font-bold text-yellow-200">Mis Estadísticas</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard
-          icon="🙏"
-          label="Oraciones"
-          value={stats.total_oraciones || 0}
-          color="from-blue-700 to-blue-900"
-        />
-        <StatCard
-          icon="🎯"
-          label="Mis Misiones"
-          value={stats.total_misiones || 0}
-          color="from-blue-800 to-gray-900"
-        />
-        <StatCard
-          icon="✅"
-          label="Respondidas"
-          value={stats.misiones_respondidas || 0}
-          color="from-green-800 to-green-950"
-        />
+        <StatCard icon="🙏" label="Oraciones" value={stats.total_oraciones || 0} color="from-blue-700 to-blue-900" />
+        <StatCard icon="🎯" label="Mis Misiones" value={stats.total_misiones || 0} color="from-blue-800 to-gray-900" />
+        <StatCard icon="✅" label="Respondidas" value={stats.misiones_respondidas || 0} color="from-green-800 to-green-950" />
       </div>
 
       <div className="bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-700">
@@ -944,10 +784,7 @@ const ProgressBar = ({ label, current, goal, color }) => {
         <span className="text-yellow-300">{current} / {goal}</span>
       </div>
       <div className="w-full bg-gray-700 rounded-full h-3">
-        <div
-          className={`bg-gradient-to-r from-${color}-600 to-${color}-800 h-3 rounded-full transition-all duration-500`}
-          style={{ width: `${percentage}%` }}
-        />
+        <div className={`bg-gradient-to-r from-${color}-600 to-${color}-800 h-3 rounded-full transition-all duration-500`} style={{ width: `${percentage}%` }} />
       </div>
     </div>
   );
