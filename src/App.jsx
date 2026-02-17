@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, PlusCircle, Users, BarChart3, Book, Bell, Menu, X, LogOut, Send, ArrowLeft } from 'lucide-react';
+import { Home, PlusCircle, Users, BarChart3, Book, Bell, Menu, X, LogOut, Send, ArrowLeft, MapPin } from 'lucide-react';
+import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+
 
 // API Configuration
 const API_BASE_URL = 'https://selahcreativeservices.com/suplica-backend/api.php';
@@ -13,6 +15,7 @@ function App() {
   const [estadisticas, setEstadisticas] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedMision, setSelectedMision] = useState(null);
+  const [misioneros, setMisioneros] = useState([]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('supplica_user');
@@ -28,6 +31,7 @@ function App() {
       loadMisiones();
       loadCirculos();
       loadEstadisticas();
+      loadMisioneros()
     }
   }, [isAuthenticated, currentUser]);
 
@@ -42,6 +46,22 @@ function App() {
       console.error('Error cargando misiones:', error);
     }
   };
+
+  const loadMisioneros = async () => {
+  try {
+    const timestamp = Date.now();
+    const response = await fetch(`${API_BASE_URL}?endpoint=misioneros&_t=${timestamp}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' }
+    });
+    const data = await response.json();
+    if (data.success) {
+      setMisioneros(data.data);
+    }
+  } catch (error) {
+    console.error('Error cargando misioneros:', error);
+  }
+};
 
   const loadCirculos = async () => {
     try {
@@ -121,6 +141,7 @@ function App() {
             
             <nav className="hidden md:flex space-x-8">
               <NavButton icon={Home} label="Inicio" active={currentView === 'home'} onClick={() => setCurrentView('home')} />
+              <NavButton icon={MapPin} label="Nuestros Misioneros" active={currentView === 'misioneros'} onClick={() => setCurrentView('misioneros')} />
               <NavButton icon={PlusCircle} label="Nueva Misión" active={currentView === 'nueva'} onClick={() => setCurrentView('nueva')} />
               <NavButton icon={Users} label="Círculos" active={currentView === 'circulos'} onClick={() => setCurrentView('circulos')} />
               <NavButton icon={BarChart3} label="Estadísticas" active={currentView === 'stats'} onClick={() => setCurrentView('stats')} />
@@ -145,6 +166,7 @@ function App() {
             <div className="md:hidden py-4 border-t border-blue-800">
               <div className="flex flex-col space-y-2">
                 <MobileNavButton icon={Home} label="Inicio" onClick={() => { setCurrentView('home'); setMobileMenuOpen(false); }} />
+                <MobileNavButton icon={MapPin} label="Nuestros Misioneros" onClick={() => { setCurrentView('misioneros'); setMobileMenuOpen(false); }} />
                 <MobileNavButton icon={PlusCircle} label="Nueva Misión" onClick={() => { setCurrentView('nueva'); setMobileMenuOpen(false); }} />
                 <MobileNavButton icon={Users} label="Círculos" onClick={() => { setCurrentView('circulos'); setMobileMenuOpen(false); }} />
                 <MobileNavButton icon={BarChart3} label="Estadísticas" onClick={() => { setCurrentView('stats'); setMobileMenuOpen(false); }} />
@@ -159,6 +181,7 @@ function App() {
         {currentView === 'nueva' && <NuevaMisionView currentUser={currentUser} onCreated={() => { loadMisiones(); setCurrentView('home'); }} />}
         {currentView === 'circulos' && <CirculosView circulos={circulos} currentUser={currentUser} onUpdate={loadCirculos} />}
         {currentView === 'stats' && <EstadisticasView stats={estadisticas} />}
+        {currentView === 'misioneros' && <MisionerosView misioneros={misioneros} />}
       </main>
 
       <footer className="bg-blue-900 mt-12 py-6">
@@ -180,31 +203,29 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
   const pollIntervalRef = useRef(null);
   const isSendingRef = useRef(false); // Track if we're sending
 
-  const loadMessages = async () => {
+const loadMessages = async () => {
   if (isSendingRef.current) {
     return;
   }
 
   try {
-    // Add timestamp to prevent caching
-    const timestamp = new Date().getTime();
-    const url = `${API_BASE_URL}?endpoint=prayer_room&id=${mision.id}&t=${timestamp}`;
-    console.log('Fetching prayers from:', url);
+    // Add timestamp to bust cache
+    const timestamp = Date.now();
+    const url = `${API_BASE_URL}?endpoint=prayer_room&id=${mision.id}&_t=${timestamp}`;
 
     const response = await fetch(url, {
-      cache: 'no-store',  // Prevent browser caching
+      cache: 'no-store',
       headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
     });
     
     const data = await response.json();
-    console.log('Prayer response:', data);
     
     if (data.success && Array.isArray(data.data)) {
       setMessages(data.data);
-      console.log('Updated messages state:', data.data.length, 'prayers');
     }
     setIsLoading(false);
   } catch (error) {
@@ -227,59 +248,57 @@ const PrayerRoomView = ({ mision, currentUser, onClose, onLogout }) => {
   }, [mision.id]);
 
   const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || sending) return;
+  e.preventDefault();
+  if (!newMessage.trim() || sending) return;
 
-    // DEBUG: Log everything
-  console.log('=== SENDING PRAYER ===');
-  console.log('Mission:', mision);
-  console.log('Mission ID:', mision.id);
-  console.log('User ID:', currentUser.id);
-  console.log('Message:', newMessage.trim());
-  console.log('API URL:', API_BASE_URL);
-  console.log('=====================');
+  const messageText = newMessage.trim();
+  setSending(true);
+  isSendingRef.current = true;
+  setNewMessage('');
 
-    const messageText = newMessage.trim();
-    setSending(true);
-    isSendingRef.current = true; // Pause polling
-    setNewMessage('');
+  try {
+    // Add timestamp to POST request too
+    const timestamp = Date.now();
+    const response = await fetch(`${API_BASE_URL}?endpoint=prayer_room&_t=${timestamp}`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      body: JSON.stringify({
+        mision_id: mision.id,
+        usuario_id: currentUser.id,
+        mensaje: messageText
+      })
+    });
 
-    try {
-      const response = await fetch(`${API_BASE_URL}?endpoint=prayer_room`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mision_id: mision.id,
-          usuario_id: currentUser.id,
-          mensaje: messageText
-        })
-      });
-
-      const data = await response.json();
+    const data = await response.json();
+    
+    if (data.success && data.data) {
+      // Add message to state immediately
+      setMessages(prev => [...prev, data.data]);
       
-      if (data.success && data.data) {
-        // Add message to state immediately
-        setMessages(prev => [...prev, data.data]);
-        
-        // Wait a moment for backend to sync, then resume polling
-        setTimeout(() => {
-          isSendingRef.current = false;
-          loadMessages(); // Force one immediate reload
-        }, 500);
-      } else {
+      // Wait 1 second for backend to fully commit, then force reload
+      setTimeout(() => {
         isSendingRef.current = false;
-        alert('Error al enviar oración');
-        setNewMessage(messageText);
-      }
-    } catch (error) {
+        loadMessages();
+      }, 1000);
+    } else {
       isSendingRef.current = false;
-      console.error('Error:', error);
-      alert('Error de conexión');
+      alert('Error al enviar oración');
       setNewMessage(messageText);
-    } finally {
-      setSending(false);
     }
-  };
+  } catch (error) {
+    isSendingRef.current = false;
+    console.error('Error:', error);
+    alert('Error de conexión');
+    setNewMessage(messageText);
+  } finally {
+    setSending(false);
+  }
+};
 
   const categoriaIcons = {
     apoyo_financiero: '💰',
@@ -786,6 +805,218 @@ const ProgressBar = ({ label, current, goal, color }) => {
       <div className="w-full bg-gray-700 rounded-full h-3">
         <div className={`bg-gradient-to-r from-${color}-600 to-${color}-800 h-3 rounded-full transition-all duration-500`} style={{ width: `${percentage}%` }} />
       </div>
+    </div>
+  );
+};
+
+
+
+const ContactLink = ({ type, value, icon, truncate }) => {
+  const prefix = type === 'email' ? 'mailto:' : 'tel:';
+  const url = prefix.concat(value);
+  return (
+    <a href={url} className="flex items-center space-x-2 text-sm text-blue-300 hover:text-yellow-200 transition">
+      <span>{icon}</span>
+      <span className={truncate ? 'truncate' : ''}>{value}</span>
+    </a>
+  );
+};
+
+// Misioneros View
+const MisionerosView = ({ misioneros }) => {
+  const [searchFilter, setSearchFilter] = useState('');
+  const [hoveredPin, setHoveredPin] = useState(null);
+  const [selectedMisionero, setSelectedMisionero] = useState(null);
+  const cardRefs = useRef({});
+
+  const filteredMisioneros = misioneros.filter(m =>
+    m.nombre.toLowerCase().includes(searchFilter.toLowerCase()) ||
+    (m.ubicacion_nombre && m.ubicacion_nombre.toLowerCase().includes(searchFilter.toLowerCase()))
+  );
+
+  const handlePinClick = (misionero) => {
+    setSelectedMisionero(misionero.id);
+    // Scroll to card
+    setTimeout(() => {
+      if (cardRefs.current[misionero.id]) {
+        cardRefs.current[misionero.id].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
+
+
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-800 via-blue-900 to-blue-800 rounded-2xl p-8 shadow-xl border border-blue-700">
+        <h2 className="text-3xl font-bold mb-2 text-yellow-200">Nuestros Misioneros</h2>
+        <p className="text-yellow-300 text-lg">{misioneros.length} misioneros sirviendo alrededor del mundo</p>
+      </div>
+
+      {/* Google Map */}
+<div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-xl">
+  <div className="p-4 border-b border-gray-700">
+    <h3 className="text-yellow-200 font-bold text-lg">🌍 Mapa Mundial</h3>
+    <p className="text-yellow-300 text-sm opacity-75">
+      Haz clic en un pin para ver el perfil del misionero
+    </p>
+  </div>
+
+  <div style={{ height: '450px', width: '100%' }}>
+    <LoadScript googleMapsApiKey="AIzaSyCVtQG04VH7t9iOZbsYadSJ6YjqtLgXMoM">
+      <GoogleMap
+  mapContainerStyle={{ width: '100%', height: '100%' }}
+  center={{ lat: 20, lng: 0 }}
+  zoom={2}
+  options={{
+    disableDefaultUI: false,
+    zoomControl: true,
+    mapTypeId: "roadmap"
+  }}
+>
+
+        {filteredMisioneros.map((misionero) => (
+          <Marker
+            key={misionero.id}
+            position={{ lat: parseFloat(misionero.lat), lng: parseFloat(misionero.lng) }}
+            onClick={() => handlePinClick(misionero)}
+          >
+            {selectedMisionero === misionero.id && (
+              <InfoWindow
+                onCloseClick={() => setSelectedMisionero(null)}
+              >
+                <div style={{ color: '#000' }}>
+                  <h4>{misionero.nombre}</h4>
+                  <p>{misionero.ubicacion_nombre}</p>
+                </div>
+              </InfoWindow>
+            )}
+          </Marker>
+        ))}
+      </GoogleMap>
+    </LoadScript>
+  </div>
+</div>
+
+
+      {/* Search Filter */}
+      <div className="relative">
+        <input
+          type="text"
+          value={searchFilter}
+          onChange={(e) => setSearchFilter(e.target.value)}
+          placeholder="Buscar por nombre o ubicación..."
+          className="w-full px-6 py-4 bg-gray-800 border border-gray-700 rounded-xl text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent text-lg"
+        />
+        <span className="absolute right-4 top-4 text-gray-500 text-lg">🔍</span>
+      </div>
+
+      {/* Missionary Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredMisioneros.map(misionero => (
+          <div
+            key={misionero.id}
+            ref={el => cardRefs.current[misionero.id] = el}
+            className={`bg-gray-800 rounded-2xl border transition-all duration-300 overflow-hidden shadow-lg ${
+              selectedMisionero === misionero.id
+                ? 'border-yellow-400 shadow-yellow-400/20 shadow-2xl'
+                : 'border-gray-700 hover:border-blue-600 hover:shadow-xl'
+            }`}
+          >
+            {/* Card Header with Photo */}
+            <div className="relative bg-gradient-to-br from-blue-800 to-blue-950 p-6">
+              <div className="flex items-start space-x-4">
+                {/* Profile Photo */}
+                <div className="flex-shrink-0">
+                  {misionero.foto_url ? (
+                    <img
+                      src={misionero.foto_url}
+                      alt={misionero.nombre}
+                      className="w-20 h-20 rounded-full object-cover border-2 border-yellow-400"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-blue-900 border-2 border-yellow-400 flex items-center justify-center text-yellow-200 text-2xl font-bold"
+                    style={{ display: misionero.foto_url ? 'none' : 'flex' }}
+                  >
+                    {misionero.nombre.charAt(0)}
+                  </div>
+                </div>
+
+                {/* Name and Location */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-xl text-yellow-200 mb-1">{misionero.nombre}</h3>
+                  {misionero.ubicacion_nombre && (
+                    <div className="flex items-center space-x-1 text-blue-300 text-sm mb-2">
+                      <MapPin className="w-3 h-3 flex-shrink-0" />
+                      <span>{misionero.ubicacion_nombre}</span>
+                    </div>
+                  )}
+                  {misionero.iglesia && (
+                    <div className="text-yellow-300 text-xs opacity-75">⛪ {misionero.iglesia}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Card Body */}
+            <div className="p-6 space-y-4">
+              {/* Family */}
+              {misionero.familia && (
+                <div>
+                  <h4 className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">👨‍👩‍👧‍👦 Familia</h4>
+                  <p className="text-yellow-300 text-sm">{misionero.familia}</p>
+                </div>
+              )}
+
+              {/* Description */}
+              {misionero.descripcion && (
+                <div>
+                  <h4 className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">✝️ Ministerio</h4>
+                  <p className="text-yellow-300 text-sm leading-relaxed">{misionero.descripcion}</p>
+                </div>
+              )}
+
+            {/* Contact Info */}
+            <div className="pt-4 border-t border-gray-700 space-y-2">
+              {misionero.email && (
+                <ContactLink type="email" value={misionero.email} icon="📧" truncate={true} />
+              )}
+              {misionero.telefono && (
+                <ContactLink type="tel" value={misionero.telefono} icon="📞" truncate={false} />
+              )}
+            </div>
+
+              {/* View on Map Button */}
+              {misionero.latitud && misionero.longitud && (
+                <button
+                  onClick={() => {
+                    setSelectedMisionero(misionero.id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    setHoveredPin(misionero.id);
+                    setTimeout(() => setHoveredPin(null), 3000);
+                  }}
+                  className="w-full py-2 rounded-lg text-sm font-semibold bg-blue-900 text-yellow-200 hover:bg-blue-800 transition border border-blue-700"
+                >
+                  📍 Ver en mapa
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {filteredMisioneros.length === 0 && (
+        <div className="text-center py-12 bg-gray-800 rounded-xl border border-gray-700">
+          <p className="text-yellow-300 text-lg">No se encontraron misioneros</p>
+          <p className="text-yellow-400 opacity-75 mt-2 text-sm">Intenta con otro nombre o ubicación</p>
+        </div>
+      )}
     </div>
   );
 };
