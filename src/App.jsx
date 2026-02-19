@@ -906,7 +906,7 @@ const MisionerosView = ({ misioneros }) => {
   </div>
 
   <div style={{ height: '450px', width: '100%' }}>
-    <LoadScript googleMapsApiKey="AIzaSyCVtQG04VH7t9iOZbsYadSJ6YjqtLgXMoM">
+    <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
       <GoogleMap
   mapContainerStyle={{ width: '100%', height: '100%' }}
   center={{ lat: 20, lng: 0 }}
