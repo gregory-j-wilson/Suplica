@@ -130,51 +130,80 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-900">
       <header className="bg-blue-900 shadow-lg sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-3">
-              <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-2 rounded-xl">
-                <Book className="w-6 h-6 text-yellow-200" />
-              </div>
-              <h1 className="text-2xl font-bold text-yellow-200">Súplica</h1>
-            </div>
-            
-            <nav className="hidden md:flex space-x-8">
-              <NavButton icon={Home} label="Inicio" active={currentView === 'home'} onClick={() => setCurrentView('home')} />
-              <NavButton icon={MapPin} label="Nuestros Misioneros" active={currentView === 'misioneros'} onClick={() => setCurrentView('misioneros')} />
-              <NavButton icon={PlusCircle} label="Nueva Misión" active={currentView === 'nueva'} onClick={() => setCurrentView('nueva')} />
-              <NavButton icon={Users} label="Círculos" active={currentView === 'circulos'} onClick={() => setCurrentView('circulos')} />
-              <NavButton icon={BarChart3} label="Estadísticas" active={currentView === 'stats'} onClick={() => setCurrentView('stats')} />
-            </nav>
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="flex justify-between items-center py-4">
+      {/* Logo */}
+      <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
+        <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-1.5 sm:p-2 rounded-xl">
+          <Book className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-200" />
+        </div>
+        <h1 className="text-lg sm:text-2xl font-bold text-yellow-200">
+          Súplica
+        </h1>
+      </div>
+      
+      {/* Desktop Navigation - Hidden on medium and below */}
+      <nav className="hidden lg:flex space-x-4 xl:space-x-8">
+        <NavButton icon={Home} label="Inicio" active={currentView === 'home'} onClick={() => setCurrentView('home')} />
+           <NavButton icon={MapPin} label="Misioneros" active={currentView === 'misioneros'} onClick={() => setCurrentView('misioneros')} />
+        <NavButton icon={PlusCircle} label="Nueva Misión" active={currentView === 'nueva'} onClick={() => setCurrentView('nueva')} />
+        <NavButton icon={Users} label="Círculos" active={currentView === 'circulos'} onClick={() => setCurrentView('circulos')} />
+        <NavButton icon={BarChart3} label="Estadísticas" active={currentView === 'stats'} onClick={() => setCurrentView('stats')} />
+       
+      </nav>
 
-            <div className="flex items-center space-x-4">
-              <span className="text-yellow-200 text-sm hidden md:block">{currentUser?.nombre}</span>
-              <button onClick={handleLogout} className="p-2 hover:bg-blue-800 rounded-full transition text-yellow-200" title="Cerrar sesión">
-                <LogOut className="w-5 h-5" />
-              </button>
-              {/* <button className="relative p-2 hover:bg-blue-800 rounded-full transition">
-                <Bell className="w-5 h-5 text-yellow-200" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button> */}
-              <button className="md:hidden p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-                {mobileMenuOpen ? <X className="w-6 h-6 text-yellow-200" /> : <Menu className="w-6 h-6 text-yellow-200" />}
-              </button>
+      {/* Right side actions */}
+      <div className="flex items-center space-x-2 sm:space-x-4">
+        {/* Username - only on larger screens */}
+        <span className="text-yellow-200 text-xs sm:text-sm hidden xl:block">{currentUser?.nombre}</span>
+        
+        {/* Logout button */}
+        <button 
+          onClick={handleLogout}
+          className="p-1.5 sm:p-2 hover:bg-blue-800 rounded-full transition text-yellow-200"
+          title="Cerrar sesión"
+        >
+          <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
+        </button>
+        
+        {/* Notifications
+        <button className="relative p-1.5 sm:p-2 hover:bg-blue-800 rounded-full transition">
+          <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-200" />
+          <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+        </button> */}
+        
+        {/* Mobile menu button - shows on lg and below */}
+        <button 
+          className="lg:hidden p-1.5 sm:p-2"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          {mobileMenuOpen ? <X className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-200" /> : <Menu className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-200" />}
+        </button>
+      </div>
+    </div>
+
+    {/* Mobile Menu */}
+    {mobileMenuOpen && (
+      <div className="lg:hidden py-4 border-t border-blue-800">
+        <div className="flex flex-col space-y-2">
+          <MobileNavButton icon={Home} label="Inicio" onClick={() => { setCurrentView('home'); setMobileMenuOpen(false); }} />
+            <MobileNavButton icon={MapPin} label="Nuestros Misioneros" onClick={() => { setCurrentView('misioneros'); setMobileMenuOpen(false); }} />
+          <MobileNavButton icon={PlusCircle} label="Nueva Misión" onClick={() => { setCurrentView('nueva'); setMobileMenuOpen(false); }} />
+          <MobileNavButton icon={Users} label="Círculos" onClick={() => { setCurrentView('circulos'); setMobileMenuOpen(false); }} />
+          <MobileNavButton icon={BarChart3} label="Estadísticas" onClick={() => { setCurrentView('stats'); setMobileMenuOpen(false); }} />
+          
+          
+          {/* User info in mobile menu */}
+          <div className="pt-4 mt-2 border-t border-blue-800">
+            <div className="px-4 py-2 text-yellow-200 text-sm">
+              👤 {currentUser?.nombre}
             </div>
           </div>
-
-          {mobileMenuOpen && (
-            <div className="md:hidden py-4 border-t border-blue-800">
-              <div className="flex flex-col space-y-2">
-                <MobileNavButton icon={Home} label="Inicio" onClick={() => { setCurrentView('home'); setMobileMenuOpen(false); }} />
-                <MobileNavButton icon={MapPin} label="Nuestros Misioneros" onClick={() => { setCurrentView('misioneros'); setMobileMenuOpen(false); }} />
-                <MobileNavButton icon={PlusCircle} label="Nueva Misión" onClick={() => { setCurrentView('nueva'); setMobileMenuOpen(false); }} />
-                <MobileNavButton icon={Users} label="Círculos" onClick={() => { setCurrentView('circulos'); setMobileMenuOpen(false); }} />
-                <MobileNavButton icon={BarChart3} label="Estadísticas" onClick={() => { setCurrentView('stats'); setMobileMenuOpen(false); }} />
-              </div>
-            </div>
-          )}
         </div>
-      </header>
+      </div>
+    )}
+  </div>
+</header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentView === 'home' && <HomeView misiones={misiones} currentUser={currentUser} onUpdate={loadMisiones} onOpenPrayerRoom={handleOpenPrayerRoom} />}
@@ -827,6 +856,9 @@ const MisionerosView = ({ misioneros }) => {
   const [searchFilter, setSearchFilter] = useState('');
   const [hoveredPin, setHoveredPin] = useState(null);
   const [selectedMisionero, setSelectedMisionero] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+
+
   const cardRefs = useRef({});
 
   const filteredMisioneros = misioneros.filter(m =>
@@ -852,6 +884,16 @@ const MisionerosView = ({ misioneros }) => {
       <div className="bg-gradient-to-r from-blue-800 via-blue-900 to-blue-800 rounded-2xl p-8 shadow-xl border border-blue-700">
         <h2 className="text-3xl font-bold mb-2 text-yellow-200">Nuestros Misioneros</h2>
         <p className="text-yellow-300 text-lg">{misioneros.length} misioneros sirviendo alrededor del mundo</p>
+
+        <div className="flex mb-3 mt-3">
+  <button
+    onClick={() => setShowModal(true)}
+    className="bg-yellow-400 text-black px-4 py-2 rounded-xl font-semibold hover:bg-yellow-300 transition"
+  >
+    + Registrarse como Misionero
+  </button>
+</div>
+
       </div>
 
       {/* Google Map */}
@@ -911,6 +953,8 @@ const MisionerosView = ({ misioneros }) => {
         />
         <span className="absolute right-4 top-4 text-gray-500 text-lg">🔍</span>
       </div>
+
+      
 
       {/* Missionary Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1019,6 +1063,14 @@ const MisionerosView = ({ misioneros }) => {
       )}
     </div>
   );
+
+  {showModal && (
+  <MissionaryModal
+    onClose={() => setShowModal(false)}
+    onSuccess={() => fetchMisioneros()}
+  />
+)}
+
 };
 
 export default App;
