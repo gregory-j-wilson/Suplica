@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Home, PlusCircle, Users, BarChart3, Book, Bell, Menu, X, LogOut, Send, ArrowLeft, MapPin } from 'lucide-react';
-import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 
 
 // API Configuration
 const API_BASE_URL = 'https://selahcreativeservices.com/suplica-backend/api.php';
 
 function App() {
+
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    libraries: ['places'],
+  });
+
   const [currentView, setCurrentView] = useState('home');
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -215,8 +221,8 @@ function App() {
 
       <footer className="bg-blue-900 mt-12 py-6">
         <div className="max-w-7xl mx-auto px-4 text-center text-yellow-200 text-sm">
-          <p>Súplica - Comunidad de Oración para Misioneros Bautistas</p>
-          <p className="mt-2 text-yellow-300 opacity-75">🙏 Orando juntos por las misiones 🌍</p>
+          <p>Súplica - Comunidad de Oración para Misioneros Bautistas Fundamentales</p>
+          <p className="mt-2 text-yellow-300 opacity-75">🙏 Apoyando uno a otro en las misiones 🌍</p>
         </div>
       </footer>
     </div>
@@ -866,15 +872,10 @@ const MisionerosView = ({ misioneros, onRefresh }) => {
     (m.ubicacion_nombre && m.ubicacion_nombre.toLowerCase().includes(searchFilter.toLowerCase()))
   );
 
-  const handlePinClick = (misionero) => {
-    setSelectedMisionero(misionero.id);
-    // Scroll to card
-    setTimeout(() => {
-      if (cardRefs.current[misionero.id]) {
-        cardRefs.current[misionero.id].scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 100);
-  };
+ const handlePinClick = (misionero) => {
+  setSelectedMisionero(misionero.id);
+  // Removed auto-scroll - just show InfoWindow
+};
 
 
 
@@ -897,7 +898,7 @@ const MisionerosView = ({ misioneros, onRefresh }) => {
 
       </div>
 
-      {/* Google Map */}
+ {/* Google Map */}
 <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-xl">
   <div className="p-4 border-b border-gray-700">
     <h3 className="text-yellow-200 font-bold text-lg">🌍 Mapa Mundial</h3>
@@ -907,12 +908,7 @@ const MisionerosView = ({ misioneros, onRefresh }) => {
   </div>
 
   <div style={{ height: '450px', width: '100%' }}>
-    <LoadScript
-  googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
-  libraries={['places']}   // 👈 THIS IS REQUIRED
->
-
-      <GoogleMap
+    <GoogleMap
   mapContainerStyle={{ width: '100%', height: '100%' }}
   center={{ lat: 20, lng: 0 }}
   zoom={2}
@@ -922,27 +918,37 @@ const MisionerosView = ({ misioneros, onRefresh }) => {
     mapTypeId: "roadmap"
   }}
 >
+  {filteredMisioneros.map((misionero) => {
+    const lat = parseFloat(misionero.latitud);
+    const lng = parseFloat(misionero.longitud);
 
-        {filteredMisioneros.map((misionero) => (
-          <Marker
-            key={misionero.id}
-            position={{ lat: parseFloat(misionero.lat), lng: parseFloat(misionero.lng) }}
-            onClick={() => handlePinClick(misionero)}
+    if (isNaN(lat) || isNaN(lng)) return null;
+
+    return (
+      <Marker
+        key={misionero.id}
+        position={{ lat, lng }}
+        onClick={() => handlePinClick(misionero)}
+      >
+        {selectedMisionero === misionero.id && (
+          <InfoWindow
+            position={{ lat, lng }}
+            onCloseClick={() => setSelectedMisionero(null)}
           >
-            {selectedMisionero === misionero.id && (
-              <InfoWindow
-                onCloseClick={() => setSelectedMisionero(null)}
-              >
-                <div style={{ color: '#000' }}>
-                  <h4>{misionero.nombre}</h4>
-                  <p>{misionero.ubicacion_nombre}</p>
-                </div>
-              </InfoWindow>
-            )}
-          </Marker>
-        ))}
-      </GoogleMap>
-    </LoadScript>
+            <div style={{ color: '#000', padding: '8px' }}>
+              <h4 style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '14px' }}>
+                {misionero.nombre}
+              </h4>
+              <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>
+                📍 {misionero.ubicacion_nombre}
+              </p>
+            </div>
+          </InfoWindow>
+        )}
+      </Marker>
+    );
+  })}
+</GoogleMap>
   </div>
 </div>
 
@@ -1116,6 +1122,15 @@ const MissionaryModal = ({ onClose, onSuccess }) => {
       autocompleteRef.current.addListener('place_changed', handlePlaceSelect);
     }
   }, []);
+
+
+
+  if (loadError) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-yellow-200">Error loading maps</div>;
+if (!isLoaded) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-yellow-200">Loading maps...</div>;
+
+if (!isAuthenticated) {
+  return <AuthView onLogin={handleLogin} />;
+}
 
   const handlePlaceSelect = () => {
     const place = autocompleteRef.current.getPlace();
