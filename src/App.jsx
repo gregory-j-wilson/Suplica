@@ -210,7 +210,7 @@ function App() {
         {currentView === 'nueva' && <NuevaMisionView currentUser={currentUser} onCreated={() => { loadMisiones(); setCurrentView('home'); }} />}
         {currentView === 'circulos' && <CirculosView circulos={circulos} currentUser={currentUser} onUpdate={loadCirculos} />}
         {currentView === 'stats' && <EstadisticasView stats={estadisticas} />}
-        {currentView === 'misioneros' && <MisionerosView misioneros={misioneros} />}
+        {currentView === 'misioneros' && <MisionerosView misioneros={misioneros} onRefresh={loadMisioneros} />}
       </main>
 
       <footer className="bg-blue-900 mt-12 py-6">
@@ -852,7 +852,7 @@ const ContactLink = ({ type, value, icon, truncate }) => {
 };
 
 // Misioneros View
-const MisionerosView = ({ misioneros }) => {
+const MisionerosView = ({ misioneros, onRefresh }) => {
   const [searchFilter, setSearchFilter] = useState('');
   const [hoveredPin, setHoveredPin] = useState(null);
   const [selectedMisionero, setSelectedMisionero] = useState(null);
@@ -879,6 +879,7 @@ const MisionerosView = ({ misioneros }) => {
 
 
   return (
+    <>
     <div className="space-y-8">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-800 via-blue-900 to-blue-800 rounded-2xl p-8 shadow-xl border border-blue-700">
@@ -906,7 +907,11 @@ const MisionerosView = ({ misioneros }) => {
   </div>
 
   <div style={{ height: '450px', width: '100%' }}>
-    <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+    <LoadScript
+  googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
+  libraries={['places']}   // 👈 THIS IS REQUIRED
+>
+
       <GoogleMap
   mapContainerStyle={{ width: '100%', height: '100%' }}
   center={{ lat: 20, lng: 0 }}
@@ -1061,16 +1066,338 @@ const MisionerosView = ({ misioneros }) => {
           <p className="text-yellow-400 opacity-75 mt-2 text-sm">Intenta con otro nombre o ubicación</p>
         </div>
       )}
-    </div>
-  );
 
-  {showModal && (
+       
+    
+    </div>
+
+    {showModal && (
   <MissionaryModal
     onClose={() => setShowModal(false)}
-    onSuccess={() => fetchMisioneros()}
+    onSuccess={() => {
+      onRefresh(); // Call the refresh function passed from parent
+      setShowModal(false);
+    }}
   />
 )}
 
+</>
+  );
+};
+
+// Missionary Registration Modal with Google Places Autocomplete
+const MissionaryModal = ({ onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    nombre: '',
+    familia: '',
+    descripcion: '',
+    iglesia: '',
+    foto_url: '',
+    telefono: '',
+    email: '',
+    lat: '',
+    lng: '',
+    ubicacion_nombre: '',
+    code: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const autocompleteRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Initialize Google Places Autocomplete
+  useEffect(() => {
+    if (window.google && inputRef.current) {
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+        types: ['(cities)'],
+        fields: ['address_components', 'geometry', 'formatted_address', 'name']
+      });
+
+      autocompleteRef.current.addListener('place_changed', handlePlaceSelect);
+    }
+  }, []);
+
+  const handlePlaceSelect = () => {
+    const place = autocompleteRef.current.getPlace();
+    
+    if (place.geometry) {
+      const lat = place.geometry.location.lat();
+      const lng = place.geometry.location.lng();
+      
+      setFormData(prev => ({
+        ...prev,
+        ubicacion_nombre: place.formatted_address || place.name,
+        lat: lat.toString(),
+        lng: lng.toString()
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
+
+  // Validate coordinates before submitting
+  if (!formData.lat || !formData.lng) {
+    setError('Debes seleccionar una ubicación de la lista de sugerencias');
+    setLoading(false);
+    return;
+  }
+
+  try {
+    console.log('Submitting missionary data:', formData); // DEBUG
+
+    const response = await fetch(`${API_BASE_URL}?endpoint=misioneros`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: formData.nombre,
+        familia: formData.familia,
+        descripcion: formData.descripcion,
+        iglesia: formData.iglesia,
+        foto_url: formData.foto_url,
+        telefono: formData.telefono,
+        email: formData.email,
+        latitud: formData.lat ? parseFloat(formData.lat) : null,
+        longitud: formData.lng ? parseFloat(formData.lng) : null,
+        ubicacion_nombre: formData.ubicacion_nombre,
+        code: formData.code
+      })
+    });
+
+    console.log('Response status:', response.status); // DEBUG
+
+    // Check if response is ok before trying to parse JSON
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('Error response:', text); // DEBUG
+      throw new Error(`Server error: ${response.status} - ${text}`);
+    }
+
+    const data = await response.json();
+    console.log('Response data:', data); // DEBUG
+
+    if (data.success) {
+      alert('¡Registro exitoso! Tu perfil de misionero ha sido creado.');
+      onSuccess();
+      onClose();
+    } else {
+      setError(data.message || 'Error al registrar');
+    }
+  } catch (error) {
+    console.error('Error completo:', error);
+    setError('Error de conexión: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  return (
+    
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      
+      <div className="bg-gray-800 rounded-2xl border border-gray-700 max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-gradient-to-r from-blue-800 to-blue-900 p-6 border-b border-blue-700 rounded-t-2xl z-10">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold text-yellow-200">Registrarse como Misionero</h2>
+            <button
+              onClick={onClose}
+              className="text-yellow-200 hover:text-yellow-100 transition text-3xl leading-none"
+            >
+              ×
+            </button>
+          </div>
+          <p className="text-yellow-300 text-sm mt-2">
+            Completa este formulario para aparecer en el mapa de misioneros
+          </p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Name */}
+          <div>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">
+              Nombre Completo *
+            </label>
+            <input
+              type="text"
+              value={formData.nombre}
+              onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              placeholder="Juan García"
+              required
+            />
+          </div>
+
+          {/* Family */}
+          <div>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">
+              Familia
+            </label>
+            <input
+              type="text"
+              value={formData.familia}
+              onChange={(e) => setFormData({ ...formData, familia: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              placeholder="María García, Sofia (8), Pablo (5)"
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">
+              Email *
+            </label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              placeholder="juan.garcia@mision.org"
+              required
+            />
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">
+              Teléfono
+            </label>
+            <input
+              type="tel"
+              value={formData.telefono}
+              onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              placeholder="+502 5555-1234"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">
+              Descripción del Ministerio *
+            </label>
+            <textarea
+              value={formData.descripcion}
+              onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+              rows="3"
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              placeholder="Plantando iglesias en comunidades rurales..."
+              required
+            />
+          </div>
+
+          {/* Church */}
+          <div>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">
+              Iglesia Enviadora
+            </label>
+            <input
+              type="text"
+              value={formData.iglesia}
+              onChange={(e) => setFormData({ ...formData, iglesia: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              placeholder="Primera Iglesia Bautista"
+            />
+          </div>
+
+          {/* Location with Google Autocomplete */}
+          <div>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">
+              Ubicación (Busca tu ciudad) *
+            </label>
+            <input
+              ref={inputRef}
+              type="text"
+              value={formData.ubicacion_nombre}
+              onChange={(e) => setFormData({ ...formData, ubicacion_nombre: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              placeholder="Empieza a escribir tu ciudad..."
+              required
+            />
+            <p className="text-xs text-yellow-400 opacity-75 mt-1">
+              🔍 Empieza a escribir y selecciona tu ciudad de la lista
+            </p>
+          </div>
+
+          {/* Coordinates Display (Read-only) */}
+          {formData.lat && formData.lng && (
+            <div className="bg-blue-900 bg-opacity-30 border border-blue-700 rounded-lg p-4">
+              <p className="text-sm text-yellow-200 font-semibold mb-2">
+                📍 Coordenadas detectadas:
+              </p>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-blue-300">Latitud:</span>
+                  <span className="text-yellow-300 ml-2">{parseFloat(formData.lat).toFixed(4)}</span>
+                </div>
+                <div>
+                  <span className="text-blue-300">Longitud:</span>
+                  <span className="text-yellow-300 ml-2">{parseFloat(formData.lng).toFixed(4)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Photo URL */}
+          <div>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">
+              URL de Foto (opcional)
+            </label>
+            <input
+              type="url"
+              value={formData.foto_url}
+              onChange={(e) => setFormData({ ...formData, foto_url: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              placeholder="https://ejemplo.com/foto.jpg"
+            />
+          </div>
+
+          {/* Registration Code */}
+          <div>
+            <label className="block text-sm font-semibold text-yellow-200 mb-2">
+              Código de Registro *
+            </label>
+            <input
+              type="text"
+              value={formData.code}
+              onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-yellow-200 placeholder-gray-500 focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              placeholder="Código proporcionado por administrador"
+              required
+            />
+            <p className="text-xs text-yellow-400 opacity-75 mt-1">
+              Este código es necesario para verificar tu identidad como misionero
+            </p>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loading || !formData.lat || !formData.lng}
+            className="w-full py-4 bg-gradient-to-r from-blue-700 to-blue-900 text-yellow-200 font-bold rounded-lg hover:from-blue-600 hover:to-blue-800 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed border border-blue-600"
+          >
+            {loading ? 'Registrando...' : 'Registrarse como Misionero'}
+          </button>
+          
+          {!formData.lat && !formData.lng && (
+            <p className="text-xs text-yellow-400 opacity-75 text-center">
+              ⚠️ Debes seleccionar una ubicación de la lista para continuar
+            </p>
+          )}
+        </form>
+      </div>
+    </div>
+  );
 };
 
 export default App;
