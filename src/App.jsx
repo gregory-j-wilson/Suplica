@@ -1125,12 +1125,7 @@ const MissionaryModal = ({ onClose, onSuccess }) => {
 
 
 
-  if (loadError) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-yellow-200">Error loading maps</div>;
-if (!isLoaded) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-yellow-200">Loading maps...</div>;
 
-if (!isAuthenticated) {
-  return <AuthView onLogin={handleLogin} />;
-}
 
   const handlePlaceSelect = () => {
     const place = autocompleteRef.current.getPlace();
